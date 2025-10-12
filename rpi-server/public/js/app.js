@@ -1,7 +1,14 @@
 // rpi-server/public/js/app.js
 class WaproConsole {
     constructor() {
-        this.socket = io();
+        this.socket = io({
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            maxReconnectionAttempts: 5,
+            timeout: 20000,
+            forceNew: true
+        });
         this.autoRefreshInterval = null;
         this.init();
     }
@@ -36,13 +43,26 @@ class WaproConsole {
 
     setupSocketListeners() {
         this.socket.on('connect', () => {
-            this.showToast('Connected to server', 'success');
+            console.log('Socket.IO connected');
             this.updateConnectionStatus('connected');
         });
 
-        this.socket.on('disconnect', () => {
-            this.showToast('Disconnected from server', 'error');
+        this.socket.on('disconnect', (reason) => {
+            console.log('Socket.IO disconnected:', reason);
             this.updateConnectionStatus('disconnected');
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.error('Socket.IO connection error:', error);
+        });
+
+        this.socket.on('reconnect', (attemptNumber) => {
+            console.log('Socket.IO reconnected after', attemptNumber, 'attempts');
+            this.updateConnectionStatus('connected');
+        });
+
+        this.socket.on('reconnect_error', (error) => {
+            console.error('Socket.IO reconnection error:', error);
         });
 
         this.socket.on('zebra-response', (data) => {
@@ -63,13 +83,19 @@ class WaproConsole {
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('active');
         });
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        const tabButton = document.querySelector(`[data-tab="${tabName}"]`);
+        if (tabButton) {
+            tabButton.classList.add('active');
+        }
 
         // Update tab content
         document.querySelectorAll('.tab-content').forEach(content => {
             content.classList.remove('active');
         });
-        document.getElementById(tabName).classList.add('active');
+        const tabContent = document.getElementById(tabName);
+        if (tabContent) {
+            tabContent.classList.add('active');
+        }
 
         // Load tab-specific data
         this.loadTabData(tabName);
@@ -345,16 +371,29 @@ class WaproConsole {
     }
 
     sendPrinterCommand(printerId) {
-        const commandSection = document.getElementById(`${printerId}Commands`);
-        if (commandSection.style.display === 'none') {
-            commandSection.style.display = 'block';
+        // Convert printerId format: zebra-1 -> zebra1, zebra-2 -> zebra2
+        const elemId = printerId.replace('-', '');
+        const commandSection = document.getElementById(`${elemId}Commands`);
+        if (commandSection) {
+            if (commandSection.style.display === 'none') {
+                commandSection.style.display = 'block';
+            } else {
+                commandSection.style.display = 'none';
+            }
         } else {
-            commandSection.style.display = 'none';
+            console.warn(`Command section not found: ${elemId}Commands`);
         }
     }
 
     async executePrinterCommand(printerId) {
-        const commandSection = document.getElementById(`${printerId}Commands`);
+        // Convert printerId format: zebra-1 -> zebra1, zebra-2 -> zebra2
+        const elemId = printerId.replace('-', '');
+        const commandSection = document.getElementById(`${elemId}Commands`);
+        if (!commandSection) {
+            console.warn(`Command section not found: ${elemId}Commands`);
+            this.showToast('Command section not found', 'error');
+            return;
+        }
         const textarea = commandSection.querySelector('textarea');
         const command = textarea.value.trim();
 
