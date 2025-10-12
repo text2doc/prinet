@@ -8,8 +8,10 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
+const fs = require('fs');
 const dotenv = require('dotenv');
 const promClient = require('prom-client');
+const winston = require('winston');
 const net = require('net');
 const sql = require('mssql');
 const { Server: IOServer } = require('socket.io');
@@ -22,11 +24,40 @@ const app = express();
 const PORT_GUI = process.env.RPI_GUI_PORT || 8080;
 const PORT_API = process.env.RPI_API_PORT || 8081;
 
+// Logger setup
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+  try { fs.mkdirSync(logsDir, { recursive: true }); } catch (_) {}
+}
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.printf(({ level, message, timestamp, ...meta }) => `${timestamp} [${level}] ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`)
+      )
+    }),
+    new winston.transports.File({ filename: path.join(logsDir, 'server.log'), maxsize: 5 * 1024 * 1024, maxFiles: 3, tailable: true })
+  ]
+});
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(morgan('dev'));
+app.use(morgan('combined', { stream: { write: (msg) => logger.http(msg.trim()) } }));
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} - ${Date.now() - start}ms`);
+  });
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Basic favicon to avoid 404 in GUI
@@ -361,6 +392,28 @@ io.on('connection', (socket) => {
   console.log('Socket.IO client connected');
   socket.emit('log-entry', { level: 'info', message: 'Connected to RPI server', timestamp: new Date().toISOString() });
   socket.on('disconnect', () => console.log('Socket.IO client disconnected'));
+});
+
+// Startup preflight diagnostics (non-blocking)
+(async () => {
+  try {
+    const [dbOk, z1, z2] = await Promise.all([
+      (async () => { try { await sql.connect(dbConfig('WAPROMAG_TEST')); await sql.close(); return true; } catch (_) { try { await sql.close(); } catch (_) {} return false; } })(),
+      checkTcp(PRINTERS['zebra-1'].host, PRINTERS['zebra-1'].port, 800),
+      checkTcp(PRINTERS['zebra-2'].host, PRINTERS['zebra-2'].port, 800),
+    ]);
+    logger.info('Preflight diagnostics', { database: dbOk, zebra1: z1, zebra2: z2 });
+  } catch (e) {
+    logger.error('Preflight diagnostics error', { error: e.message });
+  }
+})();
+
+// Process-level error handlers
+process.on('unhandledRejection', (err) => {
+  logger.error('UnhandledRejection', { error: (err && err.stack) || String(err) });
+});
+process.on('uncaughtException', (err) => {
+  logger.error('UncaughtException', { error: (err && err.stack) || String(err) });
 });
 
 // Handle graceful shutdown

@@ -1,44 +1,32 @@
 # docs/Testing.md
-# Testing Guide
 
 ## Uruchamianie testów
 
 ### Wszystkie testy
 ```bash
-make test
-```
+- `make test` – uruchamia testy pytest w kontenerze `test-runner`
+- `make test-e2e` – uruchamia testy E2E bez restartu usług
 
-### Testy kategorii
+## Preflight (weryfikacja środowiska przed testami)
+
+Skrypty `scripts/start.sh` i `scripts/test-e2e.sh` wykonują preflight-checki:
+
+- Walidacja `docker-compose.yml`
+- Sprawdzenie dostępności Dockera i docker-compose
+- Podgląd zajętości portów (8080, 8081, 8091, 8092, 9100, 9101, 1433, 3000)
+- W przypadku timeoutów lub błędów HTTP – wyświetlenie nagłówków odpowiedzi i ostatnich linii logów z kontenerów
+
+To pozwala szybko zdiagnozować problemy zanim testy zasadnicze wystartują.
+
+## Lepsza wydajność budowania
+
+Włącz szybsze budowanie obrazów Docker:
+
 ```bash
-make test-sql        # Testy bazy danych
-make test-zebra      # Testy drukarek
-make test-integration # Testy integracyjne
+export COMPOSE_BAKE=true
 ```
 
-### Testy manualne
-```bash
-# Test połączenia RPI → SQL
-curl http://localhost:8081/api/sql/test/wapromag
-
-# Test połączenia RPI → ZEBRA
-curl http://localhost:8081/api/zebra/test/zebra-1
-
-# Test komendy ZPL
-curl -X POST http://localhost:8081/api/zebra/command \
-  -H "Content-Type: application/json" \
-  -d '{"printerId":"zebra-1","command":"~HI"}'
-
-# Bezpośredni test drukarki
-echo "~HI" | nc zebra-printer-1 9100
-```
-
-## Struktura testów
-
-### test_rpi_sql.py
-- Testy połączenia z bazą danych
-- Testy zapytań SQL
-- Testy wydajności
-
+## Monitoring (Grafana + Prometheus)
 ### test_zebra_connectivity.py
 - Testy połączeń socket
 - Testy komend ZPL

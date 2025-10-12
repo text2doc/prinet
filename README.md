@@ -1,3 +1,13 @@
+### Uruchomienie monitoringu (Grafana + Prometheus)
+
+Usługi monitoringu są w profilu `monitoring`. Aby je uruchomić i zweryfikować port 3000:
+
+```bash
+docker-compose --profile monitoring up -d grafana prometheus
+curl -I http://localhost:3000
+# Oczekiwany kod HTTP: 302 (redirect do /login)
+```
+
 # WAPRO Network Mock - Test Environment
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -43,6 +53,10 @@ make test-e2e
 
 # Uruchomienie wszystkich testów
 make test
+
+# (Opcjonalnie) Szybsze budowanie obrazów
+# Lepsza wydajność: ustaw zmienną środowiskową i uruchom ponownie
+# Tip: export COMPOSE_BAKE=true
 ```
 
 ## 🏗️ Architektura
@@ -133,6 +147,15 @@ Skrypt `start.sh` automatycznie uruchamia kompleksowe testy E2E, które sprawdza
 
 6. **Integracja**
    - Połączenie RPI → MSSQL
+
+### Preflight i logowanie diagnostyczne
+
+Przed testami wykonywane są preflight-checki i zbiory logów pomocnych w diagnozie:
+
+- Walidacja `docker-compose.yml`
+- Sprawdzenie dostępności Dockera i docker-compose
+- Podgląd zajętych portów: 8080, 8081, 8091, 8092, 9100, 9101, 1433, 3000
+- W przypadku timeoutów lub błędów HTTP, skrypty drukują nagłówki odpowiedzi i ostatnie linie logów z odpowiednich kontenerów
 
 ### Generowanie raportów
 

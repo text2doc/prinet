@@ -35,14 +35,15 @@ services:
       - MSSQL_WAPROMAG_PASSWORD=WapromagPass123!
     volumes:
       - ./rpi-server:/app
-      - /app/node_modules  # Zachowaj node_modules z kontenera
+      - /app/node_modules
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - wapro-network
     depends_on:
       - mssql-wapromag
+    command: ["/bin/sh", "-c", "if [ ! -f node_modules/socket.io/package.json ]; then echo 'Installing dependencies (runtime)...' && npm install --omit=dev; fi; node server.js"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/health || curl -fs http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3

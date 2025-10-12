@@ -23,6 +23,26 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Preflight checks: docker/compose availability, port occupancy
+preflight() {
+    echoc "${BLUE}🔎 Preflight: sprawdzam środowisko...${NC}"
+    if ! docker info >/dev/null 2>&1; then
+        echoc "${RED}❌ Docker nie jest uruchomiony${NC}"; exit 1; fi
+    if ! docker-compose version >/dev/null 2>&1; then
+        echoc "${RED}❌ Brak docker-compose w PATH${NC}"; exit 1; fi
+    if ! docker-compose config >/dev/null 2>&1; then
+        echoc "${RED}❌ Błąd walidacji docker-compose.yml${NC}"; exit 1; fi
+    if [ -n "${COMPOSE_BAKE}" ]; then
+        echoc "${GREEN}ℹ️ COMPOSE_BAKE=${COMPOSE_BAKE} (wskazówka: lepsza wydajność budowania)${NC}"
+    fi
+    if command -v ss >/dev/null 2>&1; then
+        echoc "${BLUE}🔎 Otwarte porty docelowe (jeśli zajęte, start może się nie powieść):${NC}"
+        ss -lnt | awk 'NR==1 || /:(8080|8081|8091|8092|9100|9101|1433|3000)\s/' || true
+    fi
+}
+
+preflight
+
 # Uruchomienie wszystkich serwisów
 echo "🐳 Uruchamianie kontenerów..."
 docker-compose up -d
@@ -58,6 +78,13 @@ wait_for_service() {
     done
     
     echoc "${RED}✗ (timeout)${NC}"
+    # Debug logs for common services
+    case "$service_name" in
+        "RPI GUI Port"|"RPI API Port") docker-compose logs --tail 80 rpi-server || true ;;
+        "MSSQL Server Port") docker-compose logs --tail 80 mssql-wapromag || true ;;
+        "ZEBRA Printer 1"*|"ZEBRA Printer 1 ZPL Socket") docker-compose logs --tail 80 zebra-printer-1 || true ;;
+        "ZEBRA Printer 2"*|"ZEBRA Printer 2 ZPL Socket") docker-compose logs --tail 80 zebra-printer-2 || true ;;
+    esac
     return 1
 }
 
@@ -82,6 +109,15 @@ test_http_endpoint() {
         return 0
     else
         echoc "${RED}✗ (HTTP $http_code, oczekiwano $expected_status)${NC}"
+        echoc "${YELLOW}— Debug (${service_name}) response headers:${NC}"
+        curl -sI --max-time 5 "$url" 2>/dev/null | sed 's/^/     /'
+        echoc "${YELLOW}— Debug (${service_name}) last log lines:${NC}"
+        case "$service_name" in
+            *RPI* ) docker-compose logs --tail 80 rpi-server || true ;;
+            *MSSQL* ) docker-compose logs --tail 80 mssql-wapromag || true ;;
+            *ZEBRA*1* ) docker-compose logs --tail 80 zebra-printer-1 || true ;;
+            *ZEBRA*2* ) docker-compose logs --tail 80 zebra-printer-2 || true ;;
+        esac
         return 1
     fi
 }
