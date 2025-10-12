@@ -32,13 +32,16 @@ Kompletne środowisko testowe do symulacji sieci WAPRO z bazą danych MSSQL, ser
 # Konfiguracja środowiska
 make setup
 
-# Uruchomienie wszystkich serwisów
+# Uruchomienie wszystkich serwisów z automatycznymi testami E2E
 make start
 
 # Sprawdzenie statusu
 make status
 
-# Uruchomienie testów
+# Uruchomienie testów E2E
+make test-e2e
+
+# Uruchomienie wszystkich testów
 make test
 ```
 
@@ -82,6 +85,12 @@ wapro-network-mock/
 ### Uruchamianie testów
 
 ```bash
+# Uruchomienie środowiska z automatycznymi testami E2E
+./scripts/start.sh
+
+# Uruchomienie tylko testów E2E (bez restartu środowiska)
+./scripts/test-e2e.sh
+
 # Wszystkie testy
 make test
 
@@ -94,6 +103,36 @@ make test-zebra
 # Testy integracyjne
 make test-integration
 ```
+
+### Testy E2E (End-to-End)
+
+Skrypt `start.sh` automatycznie uruchamia kompleksowe testy E2E, które sprawdzają:
+
+1. **MSSQL WAPROMAG**
+   - Dostępność portu 1433
+   - Możliwość wykonania zapytań SQL
+
+2. **RPI Server**
+   - Dostępność GUI (port 8080)
+   - Dostępność API (port 8081)
+   - Endpoint `/health`
+
+3. **ZEBRA Printer 1**
+   - Interfejs web (port 8091)
+   - Socket ZPL (port 9100)
+   - API status
+
+4. **ZEBRA Printer 2**
+   - Interfejs web (port 8092)
+   - Socket ZPL (port 9101)
+   - API status
+
+5. **Monitoring** (opcjonalne)
+   - Grafana Dashboard (port 3000)
+   - Prometheus (port 9090)
+
+6. **Integracja**
+   - Połączenie RPI → MSSQL
 
 ### Generowanie raportów
 

@@ -75,7 +75,7 @@ class TestSuiteRunner:
             '--tb=short',
             f'--html=reports/test_report_{timestamp}.html',
             '--self-contained-html',
-            f'--json-report=reports/test_results_{timestamp}.json',
+            f'--json-report-file=reports/test_results_{timestamp}.json',
             '--json-report-summary'
         ]
 
@@ -160,6 +160,57 @@ class TestSuiteRunner:
             with open(f'reports/summary_{timestamp}.json', 'w') as f:
                 json.dump(summary, f, indent=2)
 
+            logger.info(f"📊 Podsumowanie testów zapisane: summary_{timestamp}.json")
+            logger.info(f"✅ Zaliczonych: {summary['passed']}/{summary['total_tests']} ({summary['success_rate']:.1f}%)")
+
+        except Exception as e:
+            logger.error(f"Błąd podczas generowania podsumowania: {e}")
+
+    def generate_health_report(self):
+        """Generuje raport zdrowia systemu"""
+        try:
+            import requests
+            from datetime import datetime
+            
+            health_data = {
+                'timestamp': datetime.now().isoformat(),
+                'components': {}
+            }
+            
+            # Testowanie komponentów
+            components = [
+                ('RPI Server', 'http://rpi-server:8081/health'),
+                ('ZEBRA Printer 1', 'http://zebra-printer-1:8080/api/status'),
+                ('ZEBRA Printer 2', 'http://zebra-printer-2:8080/api/status')
+            ]
+            
+            healthy_components = 0
+            total_components = len(components)
+            
+            for name, url in components:
+                try:
+                    response = requests.get(url, timeout=5)
+                    is_healthy = response.status_code == 200
+                    health_data['components'][name] = {
+                        'status': 'healthy' if is_healthy else 'unhealthy',
+                        'http_code': response.status_code
+                    }
+                    if is_healthy:
+                        healthy_components += 1
+                except Exception as e:
+                    health_data['components'][name] = {
+                        'status': 'error',
+                        'error': str(e)
+                    }
+            
+            health_percentage = (healthy_components / total_components * 100) if total_components > 0 else 0
+            health_data['overall_health'] = health_percentage
+            
+            # Zapisanie raportu
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            with open(f'reports/health_{timestamp}.json', 'w') as f:
+                json.dump(health_data, f, indent=2)
+            
             logger.info(
                 f"🏥 Stan zdrowia systemu: {health_percentage:.1f}% ({healthy_components}/{total_components} komponentów)")
 

@@ -1,5 +1,5 @@
 # Makefile
-.PHONY: help setup start stop restart clean test logs build rebuild status
+.PHONY: help setup start stop restart clean test test-e2e logs build rebuild status
 
 # Kolory dla output
 GREEN := \033[32m
@@ -37,6 +37,10 @@ clean: ## Czyści środowisko (usuwa kontenery, obrazy, wolumeny)
 test: ## Uruchamia wszystkie testy
 	@echo "$(BLUE)🧪 Uruchamianie testów...$(RESET)"
 	@./scripts/test-all.sh
+
+test-e2e: ## Uruchamia testy E2E wszystkich usług
+	@echo "$(BLUE)🧪 Uruchamianie testów E2E...$(RESET)"
+	@./scripts/test-e2e.sh
 
 test-zebra: ## Testuje tylko drukarki ZEBRA
 	@echo "$(BLUE)🖨️  Testowanie drukarek ZEBRA...$(RESET)"

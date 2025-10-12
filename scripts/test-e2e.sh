@@ -1,6 +1,8 @@
-
-# scripts/start.sh
 #!/bin/bash
+
+# scripts/test-e2e.sh
+# Testy E2E dla uruchomionych serwisów Docker Compose
+
 set -e
 
 # Kolory dla lepszej czytelności
@@ -10,24 +12,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo "🚀 Uruchamianie WAPRO Network Mock..."
-
-# Sprawdzenie konfiguracji
-if [ ! -f .env ]; then
-    echo -e "${RED}❌ Brak pliku .env - uruchom './scripts/setup.sh' najpierw${NC}"
-    exit 1
-fi
-
-# Uruchomienie wszystkich serwisów
-echo "🐳 Uruchamianie kontenerów..."
-docker-compose up -d
-
-# Sprawdzenie statusu
-echo "📊 Status serwisów:"
-docker-compose ps
-
+echo "🧪 Uruchamianie testów E2E WAPRO Network Mock..."
 echo ""
-echo "⏳ Oczekiwanie na uruchomienie serwisów..."
 
 # ============================================================================
 # FUNKCJE TESTOWE E2E
@@ -171,8 +157,7 @@ test_zebra_printer() {
 # GŁÓWNY PROCES TESTOWANIA
 # ============================================================================
 
-echo ""
-echo "🧪 Rozpoczynam testy E2E wszystkich usług..."
+echo "🧪 Testy E2E wszystkich usług..."
 echo "═══════════════════════════════════════════════════════════"
 
 # Licznik wyników
@@ -307,6 +292,8 @@ if docker ps --format '{{.Names}}' | grep -q "wapro-grafana"; then
     else
         FAILED_TESTS=$((FAILED_TESTS + 1))
     fi
+else
+    echo "   Grafana nie jest uruchomiona (opcjonalny profil)"
 fi
 
 if docker ps --format '{{.Names}}' | grep -q "wapro-prometheus"; then
@@ -318,6 +305,25 @@ if docker ps --format '{{.Names}}' | grep -q "wapro-prometheus"; then
     else
         FAILED_TESTS=$((FAILED_TESTS + 1))
     fi
+else
+    echo "   Prometheus nie jest uruchomiony (opcjonalny profil)"
+fi
+
+# ============================================================================
+# TEST 6: INTEGRACJA E2E
+# ============================================================================
+echo ""
+echo "🔗 Testowanie integracji E2E:"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+# Test czy RPI Server może się połączyć z MSSQL
+echo -n "   Testuję połączenie RPI -> MSSQL... "
+if docker exec rpi-mock-server nc -z mssql-wapromag 1433 2>/dev/null; then
+    echo -e "${GREEN}✓${NC}"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    echo -e "${RED}✗${NC}"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 
 # ============================================================================
@@ -333,33 +339,16 @@ echo -e "   ${RED}Niezaliczone:       $FAILED_TESTS${NC}"
 
 if [ $FAILED_TESTS -eq 0 ]; then
     echo -e "   ${GREEN}✅ Status:           SUKCES${NC}"
+    echo ""
+    echo -e "${GREEN}🎉 Wszystkie usługi działają poprawnie!${NC}"
 else
     echo -e "   ${YELLOW}⚠️  Status:           CZĘŚCIOWY SUKCES${NC}"
+    echo ""
+    echo -e "${YELLOW}⚠️  Niektóre testy nie przeszły. Sprawdź logi usług:${NC}"
+    echo "   docker-compose logs <service_name>"
 fi
 
 echo "═══════════════════════════════════════════════════════════"
-
-# ============================================================================
-# INFORMACJE O DOSTĘPNYCH INTERFEJSACH
-# ============================================================================
-echo ""
-echo "🌐 Dostępne interfejsy:"
-echo "   RPI Server GUI:      http://localhost:8080"
-echo "   RPI Server API:      http://localhost:8081"
-echo "   ZEBRA Printer 1:     http://localhost:8091"
-echo "   ZEBRA Printer 2:     http://localhost:8092"
-echo "   Monitoring:          http://localhost:3000"
-echo "   MSSQL WAPROMAG:      localhost:1433"
-
-echo ""
-if [ $FAILED_TESTS -eq 0 ]; then
-    echo -e "${GREEN}✅ Środowisko uruchomione i przetestowane pomyślnie!${NC}"
-else
-    echo -e "${YELLOW}⚠️  Środowisko uruchomione z ostrzeżeniami (niektóre testy nie przeszły)${NC}"
-    echo -e "${YELLOW}📝 Sprawdź logi usług, które nie przeszły testów: docker-compose logs <service_name>${NC}"
-fi
-
-echo "📝 Sprawdź wszystkie logi: docker-compose logs -f"
 echo ""
 
 # Zakończenie z odpowiednim kodem wyjścia

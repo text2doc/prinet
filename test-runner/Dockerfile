@@ -4,7 +4,7 @@ FROM python:3.9-slim
 # Instalacja narzędzi systemowych
 RUN apt-get update && apt-get install -y \
     curl \
-    netcat \
+    netcat-openbsd \
     telnet \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/*

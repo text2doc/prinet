@@ -224,8 +224,8 @@ WEB_INTERFACE_TEMPLATE = '''
 if __name__ == '__main__':
     printer_name = os.getenv('PRINTER_NAME', 'ZEBRA-MOCK-2')
     printer_model = os.getenv('PRINTER_MODEL', 'ZT230')
-    socket_port = int(os.getenv('PRINTER_SOCKET_PORT', '9101'))
-    web_port = int(os.getenv('FLASK_RUN_PORT', '8081'))
+    socket_port = int(os.getenv('PRINTER_SOCKET_PORT', '9100'))
+    web_port = int(os.getenv('FLASK_RUN_PORT', '8080'))
     
     printer = ZebraPrinterMock(
         name=printer_name,

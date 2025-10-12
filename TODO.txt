@@ -1,0 +1,22 @@
+
+Using cached pyproject_api-1.9.1-py3-none-any.whl (13 kB)
+Using cached virtualenv-20.31.2-py3-none-any.whl (6.1 MB)
+Using cached distlib-0.3.9-py2.py3-none-any.whl (468 kB)
+Installing collected packages: distlib, pluggy, platformdirs, packaging, filelock, colorama, chardet, cachetools, virtualenv, pyproject-api, tox
+Successfully installed cachetools-6.1.0 chardet-5.2.0 colorama-0.4.6 distlib-0.3.9 filelock-3.18.0 packaging-25.0 platformdirs-4.3.8 pluggy-1.6.0 pyproject-api-1.9.1 tox-4.26.0 virtualenv-20.31.2
+(venv) tom@nvidia:~/github/text2doc/prinet$ tox
+ROOT: No tox.ini or setup.cfg or pyproject.toml or tox.toml found, assuming empty tox.ini at /home/tom/github/text2doc/prinet
+  py: OK (0.91 seconds)
+  congratulations :) (1.16 seconds)
+(venv) tom@nvidia:~/github/text2doc/prinet$ poetry add tox
+
+Poetry could not find a pyproject.toml file in /home/tom/github/text2doc/prinet or its parents
+(venv) tom@nvidia:~/github/text2doc/prinet$
+
+
+
+ 192.168.8.168   60:95:32:12:9f:bf      2     120  Zebra Technologies Inc.
+ 192.168.8.169   00:07:4d:95:2e:16      1      64  Zebra Technologies Corp.
+
+
+  192.168.8.187   d8:3a:dd:d4:0d:09      2     120  Raspberry Pi Trading Ltd

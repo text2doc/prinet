@@ -7,34 +7,3 @@ echo "🧪 Uruchamianie testów sieci WAPRO..."
 docker-compose --profile testing up --build test-runner
 
 echo "📊 Wyniki testów dostępne w katalogu reports/"
-
-# .env.example
-# Database Configuration
-MSSQL_WAPROMAG_HOST=mssql-wapromag
-MSSQL_WAPROMAG_PORT=1433
-MSSQL_WAPROMAG_USER=sa
-MSSQL_WAPROMAG_PASSWORD=WapromagPass123!
-
-# RPI Server Configuration
-NODE_ENV=development
-RPI_GUI_PORT=8080
-RPI_API_PORT=8081
-
-# ZEBRA Printers Configuration
-ZEBRA_1_NAME=ZEBRA-001
-ZEBRA_1_MODEL=ZT230
-ZEBRA_1_PORT=9100
-ZEBRA_1_WEB_PORT=8091
-
-ZEBRA_2_NAME=ZEBRA-002
-ZEBRA_2_MODEL=ZT410
-ZEBRA_2_PORT=9101
-ZEBRA_2_WEB_PORT=8092
-
-# Monitoring
-GRAFANA_PORT=3000
-GRAFANA_ADMIN_PASSWORD=admin123
-
-# Testing
-TEST_ENVIRONMENT=docker
-GENERATE_REPORTS=true
