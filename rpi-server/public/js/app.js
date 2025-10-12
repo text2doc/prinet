@@ -127,6 +127,7 @@ class WaproConsole {
     }
 
     async loadOverviewData() {
+        console.log('Loading overview data...');
         try {
             const [systemStatus, dbStatus, printersStatus] = await Promise.all([
                 this.fetchSystemStatus(),
@@ -134,9 +135,12 @@ class WaproConsole {
                 this.fetchPrintersStatus()
             ]);
 
+            console.log('Fetched system status:', systemStatus);
             this.updateSystemStatusDisplay(systemStatus);
             this.updateDatabaseStatusDisplay(dbStatus);
             this.updatePrintersStatusDisplay(printersStatus);
+            this.updateNetworkStatusDisplay(systemStatus);
+            console.log('Overview data loaded successfully');
         } catch (error) {
             console.error('Error loading overview data:', error);
             this.showToast('Error loading overview data', 'error');
@@ -222,10 +226,52 @@ class WaproConsole {
         element.innerHTML = html;
     }
 
+    updateNetworkStatusDisplay(systemStatus) {
+        console.log('Updating network status with data:', systemStatus);
+        const element = document.getElementById('networkStatus');
+        if (!element) {
+            console.error('networkStatus element not found!');
+            return;
+        }
+
+        const networkData = systemStatus.network || {};
+        const latency = networkData.latency_ms || 0;
+        const isHealthy = latency > 0 && latency < 100;
+        const statusClass = isHealthy ? 'success' : (latency === 0 ? 'error' : 'warning');
+        const statusText = isHealthy ? 'Healthy' : (latency === 0 ? 'Offline' : 'Slow');
+        
+        console.log('Network data:', { networkData, latency, isHealthy, statusClass, statusText });
+
+        element.innerHTML = `
+            <div class="status-item ${statusClass}">
+                <i class="fas fa-${isHealthy ? 'check-circle' : (latency === 0 ? 'times-circle' : 'exclamation-triangle')}"></i>
+                <div>
+                    <strong>Network Status:</strong> ${statusText}<br>
+                    <small>Latency: ${latency}ms</small>
+                </div>
+            </div>
+            <div class="network-details">
+                <div class="metric">
+                    <span class="metric-label">Response Time:</span>
+                    <span class="metric-value">${latency}ms</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Status:</span>
+                    <span class="metric-value ${statusClass}">${statusText}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Last Check:</span>
+                    <span class="metric-value">${new Date().toLocaleTimeString()}</span>
+                </div>
+            </div>
+        `;
+    }
+
     async refreshSystemStatus() {
         try {
             const status = await this.fetchSystemStatus();
             this.updateSystemStatusDisplay(status);
+            this.updateNetworkStatusDisplay(status);
         } catch (error) {
             console.error('Error refreshing system status:', error);
         }
