@@ -10,11 +10,16 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Funkcja pomocnicza do kolorowego drukowania (zamiennik echoc)
+echoc() {
+    printf "%b\n" "$*"
+}
+
 echo "🚀 Uruchamianie WAPRO Network Mock..."
 
 # Sprawdzenie konfiguracji
 if [ ! -f .env ]; then
-    echo -e "${RED}❌ Brak pliku .env - uruchom './scripts/setup.sh' najpierw${NC}"
+    echoc "${RED}❌ Brak pliku .env - uruchom './scripts/setup.sh' najpierw${NC}"
     exit 1
 fi
 
@@ -45,14 +50,14 @@ wait_for_service() {
     
     while [ $attempt -le $max_attempts ]; do
         if nc -z -w 2 $host $port 2>/dev/null; then
-            echo -e "${GREEN}✓${NC}"
+            echoc "${GREEN}✓${NC}"
             return 0
         fi
         sleep 1
         attempt=$((attempt + 1))
     done
     
-    echo -e "${RED}✗ (timeout)${NC}"
+    echoc "${RED}✗ (timeout)${NC}"
     return 1
 }
 
@@ -64,13 +69,19 @@ test_http_endpoint() {
     
     echo -n "   Testuję $service_name ($url)... "
     
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null)
+    
+    # Jeśli curl się nie powiódł, ustaw kod na 000
+    if [ -z "$http_code" ] || [ "$http_code" = "000" ]; then
+        http_code="000"
+    fi
     
     if [ "$http_code" = "$expected_status" ]; then
-        echo -e "${GREEN}✓ (HTTP $http_code)${NC}"
+        echoc "${GREEN}✓ (HTTP $http_code)${NC}"
         return 0
     else
-        echo -e "${RED}✗ (HTTP $http_code, oczekiwano $expected_status)${NC}"
+        echoc "${RED}✗ (HTTP $http_code, oczekiwano $expected_status)${NC}"
         return 1
     fi
 }
@@ -83,11 +94,11 @@ test_tcp_socket() {
     
     echo -n "   Testuję $service_name socket ($host:$port)... "
     
-    if echo -e "\n" | nc -w 2 $host $port 2>/dev/null; then
-        echo -e "${GREEN}✓${NC}"
+    if printf "\n" | nc -w 2 $host $port 2>/dev/null; then
+        echoc "${GREEN}✓${NC}"
         return 0
     else
-        echo -e "${RED}✗${NC}"
+        echoc "${RED}✗${NC}"
         return 1
     fi
 }
@@ -99,13 +110,13 @@ test_mssql() {
     
     # Sprawdzenie czy kontener działa (obsługa zarówno mssql-tools jak i mssql-tools18)
     if docker exec wapromag-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "WapromagPass123!" -Q "SELECT 1" -C &>/dev/null; then
-        echo -e "${GREEN}✓${NC}"
+        echoc "${GREEN}✓${NC}"
         return 0
     elif docker exec wapromag-mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "WapromagPass123!" -Q "SELECT 1" &>/dev/null; then
-        echo -e "${GREEN}✓${NC}"
+        echoc "${GREEN}✓${NC}"
         return 0
     else
-        echo -e "${RED}✗${NC}"
+        echoc "${RED}✗${NC}"
         return 1
     fi
 }
@@ -122,14 +133,14 @@ test_api_endpoint() {
     if [ -n "$response" ]; then
         # Sprawdzenie czy odpowiedź wygląda jak JSON
         if echo "$response" | jq empty 2>/dev/null; then
-            echo -e "${GREEN}✓ (valid JSON)${NC}"
+            echoc "${GREEN}✓ (valid JSON)${NC}"
             return 0
         else
-            echo -e "${YELLOW}⚠ (not JSON)${NC}"
+            echoc "${YELLOW}⚠ (not JSON)${NC}"
             return 0
         fi
     else
-        echo -e "${RED}✗ (no response)${NC}"
+        echoc "${RED}✗ (no response)${NC}"
         return 1
     fi
 }
@@ -159,10 +170,10 @@ test_zebra_printer() {
     fi
     
     if [ $success -eq 3 ]; then
-        echo -e "   ${GREEN}✅ Wszystkie testy przeszły pomyślnie${NC}"
+        echoc "   ${GREEN}✅ Wszystkie testy przeszły pomyślnie${NC}"
         return 0
     else
-        echo -e "   ${YELLOW}⚠️  Przeszło $success/3 testów${NC}"
+        echoc "   ${YELLOW}⚠️  Przeszło $success/3 testów${NC}"
         return 1
     fi
 }
@@ -249,7 +260,7 @@ else
         printer1_web=1
     fi
     
-    if echo -e "\n" | nc -w 2 localhost 9100 2>/dev/null; then
+    if printf "\n" | nc -w 2 localhost 9100 2>/dev/null; then
         printer1_socket=1
     fi
     
@@ -279,7 +290,7 @@ else
         printer2_web=1
     fi
     
-    if echo -e "\n" | nc -w 2 localhost 9101 2>/dev/null; then
+    if printf "\n" | nc -w 2 localhost 9101 2>/dev/null; then
         printer2_socket=1
     fi
     
@@ -327,14 +338,14 @@ echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "📈 PODSUMOWANIE TESTÓW E2E:"
 echo "═══════════════════════════════════════════════════════════"
-echo -e "   Wszystkie testy:    $TOTAL_TESTS"
-echo -e "   ${GREEN}Zaliczone:          $PASSED_TESTS${NC}"
-echo -e "   ${RED}Niezaliczone:       $FAILED_TESTS${NC}"
+echoc "   Wszystkie testy:    $TOTAL_TESTS"
+echoc "   ${GREEN}Zaliczone:          $PASSED_TESTS${NC}"
+echoc "   ${RED}Niezaliczone:       $FAILED_TESTS${NC}"
 
 if [ $FAILED_TESTS -eq 0 ]; then
-    echo -e "   ${GREEN}✅ Status:           SUKCES${NC}"
+    echoc "   ${GREEN}✅ Status:           SUKCES${NC}"
 else
-    echo -e "   ${YELLOW}⚠️  Status:           CZĘŚCIOWY SUKCES${NC}"
+    echoc "   ${YELLOW}⚠️  Status:           CZĘŚCIOWY SUKCES${NC}"
 fi
 
 echo "═══════════════════════════════════════════════════════════"
@@ -353,10 +364,10 @@ echo "   MSSQL WAPROMAG:      localhost:1433"
 
 echo ""
 if [ $FAILED_TESTS -eq 0 ]; then
-    echo -e "${GREEN}✅ Środowisko uruchomione i przetestowane pomyślnie!${NC}"
+    echoc "${GREEN}✅ Środowisko uruchomione i przetestowane pomyślnie!${NC}"
 else
-    echo -e "${YELLOW}⚠️  Środowisko uruchomione z ostrzeżeniami (niektóre testy nie przeszły)${NC}"
-    echo -e "${YELLOW}📝 Sprawdź logi usług, które nie przeszły testów: docker-compose logs <service_name>${NC}"
+    echoc "${YELLOW}⚠️  Środowisko uruchomione z ostrzeżeniami (niektóre testy nie przeszły)${NC}"
+    echoc "${YELLOW}📝 Sprawdź logi usług, które nie przeszły testów: docker-compose logs <service_name>${NC}"
 fi
 
 echo "📝 Sprawdź wszystkie logi: docker-compose logs -f"
