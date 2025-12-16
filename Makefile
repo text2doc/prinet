@@ -127,9 +127,13 @@ shell-zebra1: ## Łączy z terminalem ZEBRA Printer 1
 shell-sql: ## Łączy z terminalem SQL Server
 	@docker-compose exec mssql-wapromag /bin/bash
 
-monitor: ## Otwiera monitoring w przeglądarce
-	@echo "$(GREEN)📊 Otwieranie monitoringu...$(RESET)"
-	@xdg-open http://localhost:3000 2>/dev/null || open http://localhost:3000 2>/dev/null || echo "Otwórz http://localhost:3000"
+monitor: ## Otwiera monitoring w przegladarce
+	@echo "$(GREEN)[i] Otwieranie monitoringu...$(RESET)"
+	@xdg-open http://localhost:3000 2>/dev/null || open http://localhost:3000 2>/dev/null || echo "Otworz http://localhost:3000"
+
+webenv: ## Uruchamia webowy edytor pliku .env (port 8888)
+	@echo "$(BLUE)[i] Uruchamianie edytora .env...$(RESET)"
+	@python3 scripts/webenv.py 8888
 
 dev: ## Tryb deweloperski (rebuild + start + logs)
 	@make rebuild

@@ -23,7 +23,7 @@ LOG_FILE="$PROJECT_DIR/logs/install.log"
 # Tworzenie katalogu logów
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 
-# Funkcja logowania
+# Funkcja logowania (bez emoji dla kompatybilności z RPi)
 log() {
     local level="$1"
     local msg="$2"
@@ -31,19 +31,19 @@ log() {
     echo "[$timestamp] [$level] $msg" >> "$LOG_FILE" 2>/dev/null || true
     
     case "$level" in
-        INFO)    echo -e "${BLUE}ℹ️  $msg${NC}" ;;
-        OK)      echo -e "${GREEN}✓ $msg${NC}" ;;
-        WARN)    echo -e "${YELLOW}⚠️  $msg${NC}" ;;
-        ERROR)   echo -e "${RED}❌ $msg${NC}" ;;
-        STEP)    echo -e "${CYAN}→ $msg${NC}" ;;
+        INFO)    echo -e "${BLUE}[i] $msg${NC}" ;;
+        OK)      echo -e "${GREEN}[+] $msg${NC}" ;;
+        WARN)    echo -e "${YELLOW}[!] $msg${NC}" ;;
+        ERROR)   echo -e "${RED}[X] $msg${NC}" ;;
+        STEP)    echo -e "${CYAN}[-] $msg${NC}" ;;
     esac
 }
 
 echo -e "${BOLD}${BLUE}"
-echo "╔══════════════════════════════════════════════════════════╗"
-echo "║     WAPRO Network Mock - Instalacja zależności          ║"
-echo "║     $(date '+%Y-%m-%d %H:%M:%S')                               ║"
-echo "╚══════════════════════════════════════════════════════════╝"
+echo "============================================================"
+echo "     WAPRO Network Mock - Instalacja zaleznosci"
+echo "     $(date '+%Y-%m-%d %H:%M:%S')"
+echo "============================================================"
 echo -e "${NC}"
 
 # Wykrywanie systemu
@@ -133,6 +133,101 @@ update_system() {
         log OK "Lista pakietów zaktualizowana"
     else
         log WARN "Problemy z aktualizacją pakietów - kontynuuję"
+    fi
+}
+
+# Konfiguracja polskiego środowiska (locale)
+configure_polish_locale() {
+    echo ""
+    log INFO "═══ KONFIGURACJA JĘZYKA POLSKIEGO ═══"
+    
+    # Sprawdzenie czy locale pl_PL.UTF-8 jest już skonfigurowane
+    if locale -a 2>/dev/null | grep -qi "pl_PL.utf8"; then
+        log OK "Locale pl_PL.UTF-8 już dostępne"
+    else
+        log STEP "Instalacja pakietu locales..."
+        apt-get install -y -qq locales >> "$LOG_FILE" 2>&1 || true
+        
+        log STEP "Generowanie locale pl_PL.UTF-8..."
+        
+        # Odkomentowanie pl_PL.UTF-8 w /etc/locale.gen
+        if [ -f /etc/locale.gen ]; then
+            sed -i 's/^# *pl_PL.UTF-8/pl_PL.UTF-8/' /etc/locale.gen 2>/dev/null || true
+            # Dodaj jeśli nie ma
+            if ! grep -q "^pl_PL.UTF-8" /etc/locale.gen; then
+                echo "pl_PL.UTF-8 UTF-8" >> /etc/locale.gen
+            fi
+        fi
+        
+        # Generowanie locale
+        if command -v locale-gen &>/dev/null; then
+            locale-gen pl_PL.UTF-8 >> "$LOG_FILE" 2>&1 || true
+            log OK "Locale pl_PL.UTF-8 wygenerowane"
+        elif command -v localedef &>/dev/null; then
+            localedef -i pl_PL -c -f UTF-8 -A /usr/share/locale/locale.alias pl_PL.UTF-8 >> "$LOG_FILE" 2>&1 || true
+            log OK "Locale pl_PL.UTF-8 utworzone"
+        fi
+    fi
+    
+    # Ustawienie domyślnego locale
+    log STEP "Konfiguracja domyślnego locale..."
+    
+    # Metoda 1: update-locale (Debian/Ubuntu)
+    if command -v update-locale &>/dev/null; then
+        update-locale LANG=pl_PL.UTF-8 >> "$LOG_FILE" 2>&1 || true
+        update-locale LC_ALL=pl_PL.UTF-8 >> "$LOG_FILE" 2>&1 || true
+    fi
+    
+    # Metoda 2: Bezpośredni zapis do /etc/default/locale
+    if [ -d /etc/default ]; then
+        cat > /etc/default/locale << 'EOFLOCALE'
+LANG=pl_PL.UTF-8
+LC_ALL=pl_PL.UTF-8
+LC_CTYPE=pl_PL.UTF-8
+LC_MESSAGES=pl_PL.UTF-8
+LC_TIME=pl_PL.UTF-8
+LC_NUMERIC=pl_PL.UTF-8
+LC_MONETARY=pl_PL.UTF-8
+EOFLOCALE
+        log OK "Zapisano /etc/default/locale"
+    fi
+    
+    # Metoda 3: /etc/locale.conf (niektóre systemy)
+    if [ -d /etc ] && [ ! -f /etc/default/locale ]; then
+        cat > /etc/locale.conf << 'EOFLOCALE2'
+LANG=pl_PL.UTF-8
+LC_ALL=pl_PL.UTF-8
+EOFLOCALE2
+    fi
+    
+    # Eksport dla bieżącej sesji
+    export LANG=pl_PL.UTF-8
+    export LC_ALL=pl_PL.UTF-8
+    
+    # Konfiguracja strefy czasowej
+    log STEP "Konfiguracja strefy czasowej (Europe/Warsaw)..."
+    if [ -f /usr/share/zoneinfo/Europe/Warsaw ]; then
+        ln -sf /usr/share/zoneinfo/Europe/Warsaw /etc/localtime 2>/dev/null || true
+        echo "Europe/Warsaw" > /etc/timezone 2>/dev/null || true
+        
+        # dpkg-reconfigure dla Debian/Ubuntu
+        if command -v dpkg-reconfigure &>/dev/null; then
+            dpkg-reconfigure -f noninteractive tzdata >> "$LOG_FILE" 2>&1 || true
+        fi
+        log OK "Strefa czasowa: Europe/Warsaw"
+    fi
+    
+    # Instalacja polskich tłumaczeń dla popularnych pakietów
+    log STEP "Instalacja polskich tłumaczeń..."
+    apt-get install -y -qq language-pack-pl 2>/dev/null >> "$LOG_FILE" 2>&1 || true
+    apt-get install -y -qq manpages-pl 2>/dev/null >> "$LOG_FILE" 2>&1 || true
+    
+    # Weryfikacja
+    local current_lang=$(locale 2>/dev/null | grep "^LANG=" | cut -d= -f2)
+    if echo "$current_lang" | grep -qi "pl_PL"; then
+        log OK "Język polski skonfigurowany: $current_lang"
+    else
+        log WARN "Locale zostanie aktywowane po ponownym zalogowaniu"
     fi
 }
 
@@ -562,19 +657,19 @@ verify_installation() {
     # Podsumowanie
     echo ""
     if [ "$all_ok" = true ] && [ "$warnings" -eq 0 ]; then
-        echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${GREEN}║     ✅ INSTALACJA ZAKOŃCZONA POMYŚLNIE!                  ║${NC}"
-        echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
+        echo -e "${GREEN}============================================================${NC}"
+        echo -e "${GREEN}     [OK] INSTALACJA ZAKONCZONA POMYSLNIE!${NC}"
+        echo -e "${GREEN}============================================================${NC}"
     elif [ "$all_ok" = true ]; then
-        echo -e "${YELLOW}╔══════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${YELLOW}║     ⚠️  INSTALACJA ZAKOŃCZONA Z OSTRZEŻENIAMI            ║${NC}"
-        echo -e "${YELLOW}╚══════════════════════════════════════════════════════════╝${NC}"
+        echo -e "${YELLOW}============================================================${NC}"
+        echo -e "${YELLOW}     [!] INSTALACJA ZAKONCZONA Z OSTRZEZENIAMI${NC}"
+        echo -e "${YELLOW}============================================================${NC}"
     else
-        echo -e "${RED}╔══════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${RED}║     ❌ INSTALACJA NIEPEŁNA                                ║${NC}"
-        echo -e "${RED}╚══════════════════════════════════════════════════════════╝${NC}"
+        echo -e "${RED}============================================================${NC}"
+        echo -e "${RED}     [X] INSTALACJA NIEPELNA${NC}"
+        echo -e "${RED}============================================================${NC}"
         echo ""
-        log INFO "Sprawdź logi: $LOG_FILE"
+        log INFO "Sprawdz logi: $LOG_FILE"
     fi
     
     echo ""
@@ -597,6 +692,9 @@ main() {
     
     # Aktualizacja pakietów
     update_system
+    
+    # Konfiguracja polskiego środowiska
+    configure_polish_locale
     
     # Instalacja narzędzi
     install_base_tools

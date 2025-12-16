@@ -36,15 +36,15 @@ log() {
     # Zapis do pliku
     echo "[$timestamp] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
     
-    # Wyświetlanie na ekranie
+    # Wyświetlanie na ekranie (bez emoji dla kompatybilności)
     case "$level" in
-        INFO)    echo -e "${BLUE}ℹ️  $message${NC}" ;;
-        SUCCESS) echo -e "${GREEN}✓ $message${NC}" ;;
-        WARN)    echo -e "${YELLOW}⚠️  $message${NC}" ;;
-        ERROR)   echo -e "${RED}❌ $message${NC}" ;;
-        DEBUG)   [ "$VERBOSE" = true ] && echo -e "${CYAN}🔍 $message${NC}" ;;
-        STEP)    echo -e "${MAGENTA}→ $message${NC}" ;;
-        HEADER)  echo -e "\n${BOLD}${BLUE}═══ $message ═══${NC}\n" ;;
+        INFO)    echo -e "${BLUE}[i] $message${NC}" ;;
+        SUCCESS) echo -e "${GREEN}[+] $message${NC}" ;;
+        WARN)    echo -e "${YELLOW}[!] $message${NC}" ;;
+        ERROR)   echo -e "${RED}[X] $message${NC}" ;;
+        DEBUG)   [ "$VERBOSE" = true ] && echo -e "${CYAN}[D] $message${NC}" ;;
+        STEP)    echo -e "${MAGENTA}[-] $message${NC}" ;;
+        HEADER)  echo -e "\n${BOLD}${BLUE}=== $message ===${NC}\n" ;;
     esac
 }
 
@@ -741,9 +741,9 @@ start_docker_service() {
 print_summary() {
     log HEADER "PODSUMOWANIE"
     
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║         ✅ KONFIGURACJA ZAKOŃCZONA POMYŚLNIE!            ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${GREEN}============================================================${NC}"
+    echo -e "${GREEN}     [OK] KONFIGURACJA ZAKONCZONA POMYSLNIE!${NC}"
+    echo -e "${GREEN}============================================================${NC}"
     echo ""
     
     # Informacje o systemie
@@ -755,12 +755,12 @@ print_summary() {
     # Wersje
     echo -e "${BOLD}Zainstalowane komponenty:${NC}"
     echo -e "  Docker:         $(docker --version 2>/dev/null | cut -d' ' -f3 | tr -d ',' || echo 'N/A')"
-    echo -e "  Docker Compose: $(docker-compose --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo 'N/A')"
+    echo -e "  Docker Compose: $(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo 'N/A')"
     echo ""
     
-    # Następne kroki
-    echo -e "${BOLD}Następne kroki:${NC}"
-    echo -e "  1. ${YELLOW}Wyloguj się i zaloguj${NC} (dla grupy docker)"
+    # Nastepne kroki
+    echo -e "${BOLD}Nastepne kroki:${NC}"
+    echo -e "  1. ${YELLOW}Wyloguj sie i zaloguj${NC} (dla grupy docker)"
     echo -e "  2. Uruchom: ${GREEN}make start${NC}"
     echo ""
     
@@ -774,13 +774,13 @@ print_summary() {
 # ============================================================================
 main() {
     echo -e "${BOLD}${BLUE}"
-    echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║       WAPRO Network Mock - Setup                        ║"
-    echo "║       $(date '+%Y-%m-%d %H:%M:%S')                               ║"
-    echo "╚══════════════════════════════════════════════════════════╝"
+    echo "============================================================"
+    echo "       WAPRO Network Mock - Setup"
+    echo "       $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "============================================================"
     echo -e "${NC}"
     
-    log INFO "Rozpoczęcie konfiguracji..."
+    log INFO "Rozpoczecie konfiguracji..."
     log DEBUG "Katalog projektu: $PROJECT_DIR"
     log DEBUG "Plik logów: $LOG_FILE"
     

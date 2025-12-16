@@ -14,11 +14,11 @@ echoc() {
     printf "%b\n" "$*"
 }
 
-echo "🚀 Uruchamianie WAPRO Network Mock..."
+echo "[*] Uruchamianie WAPRO Network Mock..."
 
 # Sprawdzenie konfiguracji
 if [ ! -f .env ]; then
-    echoc "${RED}❌ Brak pliku .env - uruchom './scripts/setup.sh' najpierw${NC}"
+    echoc "${RED}[X] Brak pliku .env - uruchom './scripts/setup.sh' najpierw${NC}"
     exit 1
 fi
 
@@ -29,18 +29,18 @@ set +a
 
 # Preflight checks: docker/compose availability, port occupancy
 preflight() {
-    echoc "${BLUE}🔎 Preflight: sprawdzam środowisko...${NC}"
+    echoc "${BLUE}[i] Preflight: sprawdzam srodowisko...${NC}"
     if ! docker info >/dev/null 2>&1; then
-        echoc "${RED}❌ Docker nie jest uruchomiony${NC}"; exit 1; fi
+        echoc "${RED}[X] Docker nie jest uruchomiony${NC}"; exit 1; fi
     if ! docker-compose version >/dev/null 2>&1; then
-        echoc "${RED}❌ Brak docker-compose w PATH${NC}"; exit 1; fi
+        echoc "${RED}[X] Brak docker-compose w PATH${NC}"; exit 1; fi
     if ! docker-compose config >/dev/null 2>&1; then
-        echoc "${RED}❌ Błąd walidacji docker-compose.yml${NC}"; exit 1; fi
+        echoc "${RED}[X] Blad walidacji docker-compose.yml${NC}"; exit 1; fi
     if [ -n "${COMPOSE_BAKE}" ]; then
-        echoc "${GREEN}ℹ️ COMPOSE_BAKE=${COMPOSE_BAKE} (wskazówka: lepsza wydajność budowania)${NC}"
+        echoc "${GREEN}[i] COMPOSE_BAKE=${COMPOSE_BAKE}${NC}"
     fi
     if command -v ss >/dev/null 2>&1; then
-        echoc "${BLUE}🔎 Otwarte porty docelowe (jeśli zajęte, start może się nie powieść):${NC}"
+        echoc "${BLUE}[i] Otwarte porty docelowe:${NC}"
         ss -lnt | awk 'NR==1 || /:(8080|8081|8091|8092|9100|9101|1433|3000)\s/' || true
     fi
 }
@@ -48,15 +48,15 @@ preflight() {
 preflight
 
 # Uruchomienie wszystkich serwisów
-echo "🐳 Uruchamianie kontenerów..."
+echo "[*] Uruchamianie kontenerów..."
 docker-compose up -d
 
 # Sprawdzenie statusu
-echo "📊 Status serwisów:"
+echo "[i] Status serwisów:"
 docker-compose ps
 
 echo ""
-echo "⏳ Oczekiwanie na uruchomienie serwisów..."
+echo "[.] Oczekiwanie na uruchomienie serwisów..."
 
 # ============================================================================
 # FUNKCJE TESTOWE E2E
@@ -74,14 +74,14 @@ wait_for_service() {
     
     while [ $attempt -le $max_attempts ]; do
         if nc -z -w 2 $host $port 2>/dev/null; then
-            echoc "${GREEN}✓${NC}"
+            echoc "${GREEN}[+]${NC}"
             return 0
         fi
         sleep 1
         attempt=$((attempt + 1))
     done
     
-    echoc "${RED}✗ (timeout)${NC}"
+    echoc "${RED}[-] (timeout)${NC}"
     # Debug logs for common services
     case "$service_name" in
         "RPI GUI Port"|"RPI API Port") docker-compose logs --tail 80 rpi-server || true ;;
@@ -109,10 +109,10 @@ test_http_endpoint() {
     fi
     
     if [ "$http_code" = "$expected_status" ]; then
-        echoc "${GREEN}✓ (HTTP $http_code)${NC}"
+        echoc "${GREEN}[+] (HTTP $http_code)${NC}"
         return 0
     else
-        echoc "${RED}✗ (HTTP $http_code, oczekiwano $expected_status)${NC}"
+        echoc "${RED}[-] (HTTP $http_code, oczekiwano $expected_status)${NC}"
         echoc "${YELLOW}— Debug (${service_name}) response headers:${NC}"
         curl -sI --max-time 5 "$url" 2>/dev/null | sed 's/^/     /'
         echoc "${YELLOW}— Debug (${service_name}) last log lines:${NC}"
@@ -135,10 +135,10 @@ test_tcp_socket() {
     echo -n "   Testuję $service_name socket ($host:$port)... "
     
     if printf "\n" | nc -w 2 $host $port 2>/dev/null; then
-        echoc "${GREEN}✓${NC}"
+        echoc "${GREEN}[+]${NC}"
         return 0
     else
-        echoc "${RED}✗${NC}"
+        echoc "${RED}[-]${NC}"
         return 1
     fi
 }
@@ -150,13 +150,13 @@ test_mssql() {
     
     # Sprawdzenie czy kontener działa (obsługa zarówno mssql-tools jak i mssql-tools18)
     if docker exec wapromag-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "WapromagPass123!" -Q "SELECT 1" -C &>/dev/null; then
-        echoc "${GREEN}✓${NC}"
+        echoc "${GREEN}[+]${NC}"
         return 0
     elif docker exec wapromag-mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "WapromagPass123!" -Q "SELECT 1" &>/dev/null; then
-        echoc "${GREEN}✓${NC}"
+        echoc "${GREEN}[+]${NC}"
         return 0
     else
-        echoc "${RED}✗${NC}"
+        echoc "${RED}[-]${NC}"
         return 1
     fi
 }
@@ -173,14 +173,14 @@ test_api_endpoint() {
     if [ -n "$response" ]; then
         # Sprawdzenie czy odpowiedź wygląda jak JSON
         if echo "$response" | jq empty 2>/dev/null; then
-            echoc "${GREEN}✓ (valid JSON)${NC}"
+            echoc "${GREEN}[+] (valid JSON)${NC}"
             return 0
         else
             echoc "${YELLOW}⚠ (not JSON)${NC}"
             return 0
         fi
     else
-        echoc "${RED}✗ (no response)${NC}"
+        echoc "${RED}[-] (no response)${NC}"
         return 1
     fi
 }
@@ -192,7 +192,7 @@ test_zebra_printer() {
     local printer_name=$3
     local success=0
     
-    echo "🖨️  Testowanie $printer_name:"
+    echo "[P]  Testowanie $printer_name:"
     
     # Test interfejsu web
     if test_http_endpoint "http://localhost:$web_port" "$printer_name Web UI"; then
@@ -210,10 +210,10 @@ test_zebra_printer() {
     fi
     
     if [ $success -eq 3 ]; then
-        echoc "   ${GREEN}✅ Wszystkie testy przeszły pomyślnie${NC}"
+        echoc "   ${GREEN}[OK] Wszystkie testy przeszły pomyślnie${NC}"
         return 0
     else
-        echoc "   ${YELLOW}⚠️  Przeszło $success/3 testów${NC}"
+        echoc "   ${YELLOW}[!]  Przeszło $success/3 testów${NC}"
         return 1
     fi
 }
@@ -223,7 +223,7 @@ test_zebra_printer() {
 # ============================================================================
 
 echo ""
-echo "🧪 Rozpoczynam testy E2E wszystkich usług..."
+echo "[T] Rozpoczynam testy E2E wszystkich usług..."
 echo "═══════════════════════════════════════════════════════════"
 
 # Licznik wyników
@@ -235,7 +235,7 @@ FAILED_TESTS=0
 # TEST 1: MSSQL WAPROMAG
 # ============================================================================
 echo ""
-echo "💾 Testowanie MSSQL WAPROMAG Database:"
+echo "[D] Testowanie MSSQL WAPROMAG Database:"
 TOTAL_TESTS=$((TOTAL_TESTS + 2))
 
 if wait_for_service "localhost" "1433" "MSSQL Server Port"; then
@@ -256,7 +256,7 @@ fi
 # TEST 2: RPI SERVER
 # ============================================================================
 echo ""
-echo "🖥️  Testowanie RPI Mock Server:"
+echo "[S]  Testowanie RPI Mock Server:"
 TOTAL_TESTS=$((TOTAL_TESTS + 4))
 
 # Porty z .env lub domyślne
@@ -351,7 +351,7 @@ fi
 # TEST 5: MONITORING (jeśli uruchomione)
 # ============================================================================
 echo ""
-echo "📊 Testowanie Monitoring Services (opcjonalne):"
+echo "[i] Testowanie Monitoring Services (opcjonalne):"
 
 if docker ps --format '{{.Names}}' | grep -q "wapro-grafana"; then
     echo "   Wykryto uruchomioną Grafanę..."
@@ -387,9 +387,9 @@ echoc "   ${GREEN}Zaliczone:          $PASSED_TESTS${NC}"
 echoc "   ${RED}Niezaliczone:       $FAILED_TESTS${NC}"
 
 if [ $FAILED_TESTS -eq 0 ]; then
-    echoc "   ${GREEN}✅ Status:           SUKCES${NC}"
+    echoc "   ${GREEN}[OK] Status:           SUKCES${NC}"
 else
-    echoc "   ${YELLOW}⚠️  Status:           CZĘŚCIOWY SUKCES${NC}"
+    echoc "   ${YELLOW}[!]  Status:           CZĘŚCIOWY SUKCES${NC}"
 fi
 
 echo "═══════════════════════════════════════════════════════════"
@@ -398,7 +398,7 @@ echo "════════════════════════�
 # INFORMACJE O DOSTĘPNYCH INTERFEJSACH
 # ============================================================================
 echo ""
-echo "🌐 Dostępne interfejsy:"
+echo "[i] Dostępne interfejsy:"
 echo "   RPI Server GUI:      http://localhost:${RPI_GUI_EXTERNAL_PORT:-8082}"
 echo "   RPI Server API:      http://localhost:${RPI_API_EXTERNAL_PORT:-8081}"
 echo "   ZEBRA Printer 1:     http://localhost:${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}"
@@ -408,13 +408,13 @@ echo "   MSSQL WAPROMAG:      localhost:${MSSQL_EXTERNAL_PORT:-1433}"
 
 echo ""
 if [ $FAILED_TESTS -eq 0 ]; then
-    echoc "${GREEN}✅ Środowisko uruchomione i przetestowane pomyślnie!${NC}"
+    echoc "${GREEN}[OK] Środowisko uruchomione i przetestowane pomyślnie!${NC}"
 else
-    echoc "${YELLOW}⚠️  Środowisko uruchomione z ostrzeżeniami (niektóre testy nie przeszły)${NC}"
-    echoc "${YELLOW}📝 Sprawdź logi usług, które nie przeszły testów: docker-compose logs <service_name>${NC}"
+    echoc "${YELLOW}[!]  Środowisko uruchomione z ostrzeżeniami (niektóre testy nie przeszły)${NC}"
+    echoc "${YELLOW}[i] Sprawdź logi usług, które nie przeszły testów: docker-compose logs <service_name>${NC}"
 fi
 
-echo "📝 Sprawdź wszystkie logi: docker-compose logs -f"
+echo "[i] Sprawdź wszystkie logi: docker-compose logs -f"
 echo ""
 
 # Zakończenie z odpowiednim kodem wyjścia
