@@ -526,7 +526,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         
         function parseEnvContent(content) {
             const config = {};
-            content.split('\\n').forEach(line => {
+            content.split('\n').forEach(line => {
                 line = line.trim();
                 if (line && !line.startsWith('#')) {
                     const eqIndex = line.indexOf('=');

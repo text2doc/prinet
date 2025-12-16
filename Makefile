@@ -166,6 +166,8 @@ monitor: ## Otwiera monitoring w przegladarce
 
 webenv: ## Uruchamia webowy edytor pliku .env (port 8888)
 	@echo "$(BLUE)[i] Uruchamianie edytora .env...$(RESET)"
+	@fuser -k 8888/tcp 2>/dev/null || true
+	@sleep 1
 	@python3 scripts/webenv.py 8888
 
 discover: ## Wykrywa urzadzenia sieciowe (drukarki Zebra, MSSQL)

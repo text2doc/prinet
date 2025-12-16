@@ -31,19 +31,33 @@ MAX_WORKERS = 50
 
 
 def get_local_ips():
-    """Get local IP addresses and network ranges"""
+    """Get local IP addresses - only first network interface (eth/wlan)"""
     ips = []
     try:
-        # Method 1: ip command
-        result = subprocess.run(['ip', '-4', 'addr', 'show'], capture_output=True, text=True)
-        for line in result.stdout.split('\n'):
-            if 'inet ' in line and '127.' not in line:
-                parts = line.strip().split()
-                for i, p in enumerate(parts):
-                    if p == 'inet' and i + 1 < len(parts):
-                        ip_cidr = parts[i + 1]
-                        ip = ip_cidr.split('/')[0]
-                        ips.append(ip)
+        # Method 1: ip command - get source IP from default route
+        result = subprocess.run(['ip', 'route', 'get', '8.8.8.8'], capture_output=True, text=True)
+        # Parse: "8.8.8.8 via 192.168.188.1 dev wlan0 src 192.168.188.212 uid 1000"
+        # We need the IP after "src"
+        parts = result.stdout.split()
+        for i, part in enumerate(parts):
+            if part == 'src' and i + 1 < len(parts):
+                ips = [parts[i + 1]]
+                break
+        
+        if not ips:
+            # Fallback: get first non-loopback IP from interface
+            result = subprocess.run(['ip', '-4', 'addr', 'show'], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'inet ' in line and '127.' not in line:
+                    parts = line.strip().split()
+                    for i, p in enumerate(parts):
+                        if p == 'inet' and i + 1 < len(parts):
+                            ip_cidr = parts[i + 1]
+                            ip = ip_cidr.split('/')[0]
+                            ips.append(ip)
+                            break  # Only first IP
+                    if ips:
+                        break
     except:
         pass
     
@@ -55,7 +69,7 @@ def get_local_ips():
         except:
             ips = ['192.168.1.1']
     
-    return ips
+    return ips[:1]  # Return only first IP
 
 
 def get_network_range(ip):
