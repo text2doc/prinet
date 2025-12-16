@@ -39,6 +39,8 @@ Kompletne środowisko testowe do symulacji sieci WAPRO z bazą danych MSSQL, ser
 ### Instalacja
 
 ```bash
+git clone https://github.com/text2doc/prinet
+
 # Konfiguracja środowiska
 make setup
 
