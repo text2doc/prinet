@@ -51,7 +51,7 @@ prod: ## Uruchamia tryb produkcyjny (tylko RPI Server)
 	@echo "$(YELLOW)[!] Uzywa zewnetrznych: MSSQL, Zebra printers$(RESET)"
 	@docker-compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
 	@docker network rm prinet_wapro-network 2>/dev/null || true
-	@docker-compose -f docker-compose.prod.yml up -d --build
+	@docker-compose -f docker-compose.prod.yml up --build
 	@echo ""
 	@echo "$(GREEN)[+] RPI Server uruchomiony$(RESET)"
 	@docker-compose -f docker-compose.prod.yml ps
@@ -70,10 +70,10 @@ prod-status: ## Status trybu produkcyjnego
 	@echo "$(BLUE)[i] Status produkcyjny:$(RESET)"
 	@docker-compose -f docker-compose.prod.yml ps
 	@echo ""
-	@echo "$(BLUE)[i] Konfiguracja zewnetrzna:$(RESET)"
-	@echo "  MSSQL:   $${MSSQL_HOST:-nie ustawiono}:$${MSSQL_PORT:-1433}"
-	@echo "  Zebra 1: $${ZEBRA_1_HOST:-nie ustawiono}:$${ZEBRA_1_SOCKET_PORT:-9100}"
-	@echo "  Zebra 2: $${ZEBRA_2_HOST:-nie ustawiono}:$${ZEBRA_2_SOCKET_PORT:-9100}"
+	@echo "$(BLUE)[i] Konfiguracja zewnetrzna (z .env):$(RESET)"
+	@. ./.env 2>/dev/null; echo "  MSSQL:   $${MSSQL_HOST:-nie ustawiono}:$${MSSQL_PORT:-1433}"
+	@. ./.env 2>/dev/null; echo "  Zebra 1: $${ZEBRA_1_HOST:-nie ustawiono}:$${ZEBRA_1_SOCKET_PORT:-9100}"
+	@. ./.env 2>/dev/null; echo "  Zebra 2: $${ZEBRA_2_HOST:-nie ustawiono}:$${ZEBRA_2_SOCKET_PORT:-9100}"
 
 prod-build: ## Buduje obraz produkcyjny
 	@echo "$(YELLOW)[B] Budowanie obrazu produkcyjnego...$(RESET)"
@@ -154,15 +154,39 @@ rebuild: ## Przebudowuje wszystkie obrazy (bez cache)
 
 status: ## Pokazuje status wszystkich serwisow
 	@echo "$(BLUE)[i] Status serwisow:$(RESET)"
-	@docker-compose --profile full ps 2>/dev/null || sudo docker-compose --profile full ps
+	@docker-compose --profile full ps 2>/dev/null || docker ps --format "  {{.Names}}: {{.Status}}" 2>/dev/null | grep -E "rpi|zebra|mssql|prinet" || echo "  Brak uruchomionych kontenerow"
 	@echo ""
-	@echo "$(BLUE)[i] Dostepne interfejsy (porty z .env):$(RESET)"
-	@echo "  RPI Server GUI:      $(GREEN)http://localhost:$${RPI_GUI_EXTERNAL_PORT:-8082}$(RESET)"
-	@echo "  RPI Server API:      $(GREEN)http://localhost:$${RPI_API_EXTERNAL_PORT:-8081}$(RESET)"
-	@echo "  ZEBRA Printer 1:     $(GREEN)http://localhost:$${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}$(RESET)"
-	@echo "  ZEBRA Printer 2:     $(GREEN)http://localhost:$${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}$(RESET)"
-	@echo "  Monitoring:          $(GREEN)http://localhost:$${GRAFANA_PORT:-3000}$(RESET)"
-	@echo "  MSSQL WAPROMAG:      $(GREEN)localhost:$${MSSQL_EXTERNAL_PORT:-1433}$(RESET)"
+	@echo "$(BLUE)[i] Dostepne interfejsy:$(RESET)"
+	@if curl -s --connect-timeout 1 http://localhost:$${RPI_GUI_EXTERNAL_PORT:-8082}/health >/dev/null 2>&1; then \
+		echo "  RPI Server GUI:      $(GREEN)[+] http://localhost:$${RPI_GUI_EXTERNAL_PORT:-8082}$(RESET)"; \
+	else \
+		echo "  RPI Server GUI:      $(RED)[-] OFFLINE$(RESET)"; \
+	fi
+	@if curl -s --connect-timeout 1 http://localhost:$${RPI_API_EXTERNAL_PORT:-8081}/health >/dev/null 2>&1; then \
+		echo "  RPI Server API:      $(GREEN)[+] http://localhost:$${RPI_API_EXTERNAL_PORT:-8081}$(RESET)"; \
+	else \
+		echo "  RPI Server API:      $(RED)[-] OFFLINE$(RESET)"; \
+	fi
+	@if curl -s --connect-timeout 1 http://localhost:$${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}/api/status >/dev/null 2>&1; then \
+		echo "  ZEBRA Printer 1:     $(GREEN)[+] http://localhost:$${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}$(RESET)"; \
+	else \
+		echo "  ZEBRA Printer 1:     $(RED)[-] OFFLINE$(RESET)"; \
+	fi
+	@if curl -s --connect-timeout 1 http://localhost:$${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}/api/status >/dev/null 2>&1; then \
+		echo "  ZEBRA Printer 2:     $(GREEN)[+] http://localhost:$${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}$(RESET)"; \
+	else \
+		echo "  ZEBRA Printer 2:     $(RED)[-] OFFLINE$(RESET)"; \
+	fi
+	@if curl -s --connect-timeout 1 http://localhost:$${GRAFANA_PORT:-3000} >/dev/null 2>&1; then \
+		echo "  Monitoring:          $(GREEN)[+] http://localhost:$${GRAFANA_PORT:-3000}$(RESET)"; \
+	else \
+		echo "  Monitoring:          $(YELLOW)[?] OFFLINE$(RESET)"; \
+	fi
+	@if nc -z localhost $${MSSQL_EXTERNAL_PORT:-1433} 2>/dev/null; then \
+		echo "  MSSQL WAPROMAG:      $(GREEN)[+] localhost:$${MSSQL_EXTERNAL_PORT:-1433}$(RESET)"; \
+	else \
+		echo "  MSSQL WAPROMAG:      $(RED)[-] OFFLINE$(RESET)"; \
+	fi
 
 health: ## Sprawdza stan zdrowia wszystkich serwisów
 	@echo "$(BLUE)[H] Health Check:$(RESET)"

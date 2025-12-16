@@ -252,8 +252,100 @@ class WaproConsole {
     init() {
         this.setupEventListeners();
         this.setupSocketListeners();
+        this.setupURLHandling();
         this.loadInitialData();
         this.setupAutoRefresh();
+        this.restoreStateFromURL();
+    }
+
+    // URL State Management
+    setupURLHandling() {
+        // Handle browser back/forward
+        window.addEventListener('popstate', (event) => {
+            if (event.state) {
+                this.restoreState(event.state);
+            } else {
+                this.restoreStateFromURL();
+            }
+        });
+    }
+
+    restoreStateFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        const printer = params.get('printer');
+        const command = params.get('cmd');
+        const action = params.get('action');
+
+        if (tab) {
+            this.switchTab(tab, false); // false = don't update URL
+        }
+
+        if (printer && command) {
+            // Restore printer command
+            setTimeout(() => {
+                this.openCommandModal(printer);
+                const input = document.getElementById('modalCommandInput');
+                if (input) {
+                    input.value = decodeURIComponent(command);
+                    this.previewModalCommand();
+                }
+            }, 500);
+        }
+
+        if (action) {
+            this.executeURLAction(action, params);
+        }
+
+        this.logURLState('Restored state from URL');
+    }
+
+    updateURL(params = {}) {
+        const url = new URL(window.location.href);
+        
+        // Update or remove parameters
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== null && value !== undefined && value !== '') {
+                url.searchParams.set(key, value);
+            } else {
+                url.searchParams.delete(key);
+            }
+        });
+
+        // Push to history
+        const state = { ...params, timestamp: Date.now() };
+        window.history.pushState(state, '', url.toString());
+        
+        this.logURLState('URL updated', params);
+    }
+
+    restoreState(state) {
+        if (state.tab) {
+            this.switchTab(state.tab, false);
+        }
+    }
+
+    executeURLAction(action, params) {
+        switch (action) {
+            case 'test-printer':
+                const printerId = params.get('printer');
+                if (printerId) this.testPrinter(printerId);
+                break;
+            case 'diagnostics':
+                this.runFullDiagnostics();
+                break;
+            case 'test-db':
+                this.testDatabaseConnection();
+                break;
+        }
+    }
+
+    logURLState(message, data = {}) {
+        console.log(`[URL State] ${message}`, {
+            url: window.location.href,
+            params: Object.fromEntries(new URLSearchParams(window.location.search)),
+            ...data
+        });
     }
 
     setupEventListeners() {
@@ -314,7 +406,7 @@ class WaproConsole {
         });
     }
 
-    switchTab(tabName) {
+    switchTab(tabName, updateURL = true) {
         // Update tab buttons
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('active');
@@ -332,6 +424,18 @@ class WaproConsole {
         if (tabContent) {
             tabContent.classList.add('active');
         }
+
+        // Update URL with current tab
+        if (updateURL) {
+            this.updateURL({ tab: tabName, printer: null, cmd: null, action: null });
+        }
+
+        // Log tab switch
+        this.addLogEntry({
+            level: 'info',
+            message: `Switched to tab: ${tabName}`,
+            timestamp: new Date().toISOString()
+        });
 
         // Load tab-specific data
         this.loadTabData(tabName);
@@ -626,28 +730,93 @@ class WaproConsole {
 
     // Printer functions
     async testPrinter(printerId) {
+        const startTime = Date.now();
+        this.addLogEntry({
+            level: 'info',
+            message: `[PRINTER] Testing connection to ${printerId}...`,
+            timestamp: new Date().toISOString()
+        });
+
         try {
             const response = await fetch(`/api/zebra/test/${printerId}`);
             const result = await response.json();
+            const elapsed = Date.now() - startTime;
 
             this.updatePrinterStatus(printerId, result.success);
-            this.showToast(`${printerId} test: ${result.success ? 'Success' : 'Failed'}`,
+            
+            // Detailed logging
+            this.addLogEntry({
+                level: result.success ? 'info' : 'error',
+                message: `[PRINTER] ${printerId} test ${result.success ? 'PASSED' : 'FAILED'} (${elapsed}ms)`,
+                timestamp: new Date().toISOString()
+            });
+
+            if (result.success) {
+                this.addLogEntry({
+                    level: 'info',
+                    message: `[PRINTER] ${printerId} - Connection: OK, Port: 9100`,
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                this.addLogEntry({
+                    level: 'error',
+                    message: `[PRINTER] ${printerId} - Error: ${result.error || 'Connection failed'}`,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            this.showToast(`${printerId} test: ${result.success ? 'Success' : 'Failed'} (${elapsed}ms)`,
                           result.success ? 'success' : 'error');
+            
+            // Update URL with action
+            this.updateURL({ tab: 'printers', action: 'test-printer', printer: printerId });
         } catch (error) {
-            this.showToast(`${printerId} test failed`, 'error');
+            this.addLogEntry({
+                level: 'error',
+                message: `[PRINTER] ${printerId} - Exception: ${error.message}`,
+                timestamp: new Date().toISOString()
+            });
+            this.showToast(`${printerId} test failed: ${error.message}`, 'error');
         }
     }
 
     async printTestLabel(printerId) {
+        const startTime = Date.now();
+        this.addLogEntry({
+            level: 'info',
+            message: `[PRINTER] Sending test label to ${printerId}...`,
+            timestamp: new Date().toISOString()
+        });
+
         try {
             const response = await fetch(`/api/zebra/test-print/${printerId}`, {
                 method: 'POST'
             });
             const result = await response.json();
+            const elapsed = Date.now() - startTime;
 
-            this.showToast(`Test label ${result.success ? 'sent' : 'failed'}`,
+            this.addLogEntry({
+                level: result.success ? 'info' : 'error',
+                message: `[PRINTER] Test label to ${printerId}: ${result.success ? 'SENT' : 'FAILED'} (${elapsed}ms)`,
+                timestamp: new Date().toISOString()
+            });
+
+            if (result.response) {
+                this.addLogEntry({
+                    level: 'info',
+                    message: `[PRINTER] ${printerId} response: ${result.response}`,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            this.showToast(`Test label ${result.success ? 'sent' : 'failed'} (${elapsed}ms)`,
                           result.success ? 'success' : 'error');
         } catch (error) {
+            this.addLogEntry({
+                level: 'error',
+                message: `[PRINTER] Test label to ${printerId} failed: ${error.message}`,
+                timestamp: new Date().toISOString()
+            });
             this.showToast('Test print failed', 'error');
         }
     }
@@ -676,12 +845,25 @@ class WaproConsole {
         
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+
+        // Update URL with printer modal state
+        this.updateURL({ tab: 'printers', printer: printerId });
+
+        this.addLogEntry({
+            level: 'info',
+            message: `[PRINTER] Opened command modal for ${printerId}`,
+            timestamp: new Date().toISOString()
+        });
     }
 
     closeCommandModal() {
         const modal = document.getElementById('zplCommandModal');
         modal.classList.remove('active');
         document.body.style.overflow = '';
+        
+        // Clear printer from URL
+        this.updateURL({ tab: 'printers', printer: null, cmd: null });
+        
         this.currentModalPrinter = null;
     }
 
@@ -689,6 +871,20 @@ class WaproConsole {
         const input = document.getElementById('modalCommandInput');
         input.value = command;
         this.previewModalCommand();
+
+        // Update URL with selected command (abbreviated)
+        const cmdAbbrev = command.length > 50 ? command.substring(0, 50) : command;
+        this.updateURL({ 
+            tab: 'printers', 
+            printer: this.currentModalPrinter, 
+            cmd: encodeURIComponent(cmdAbbrev) 
+        });
+
+        this.addLogEntry({
+            level: 'info',
+            message: `[PRINTER] Selected command: ${command.substring(0, 30)}...`,
+            timestamp: new Date().toISOString()
+        });
     }
 
     previewModalCommand() {
@@ -750,6 +946,7 @@ class WaproConsole {
         const input = document.getElementById('modalCommandInput');
         const command = input.value.trim();
         const printerId = this.currentModalPrinter;
+        const startTime = Date.now();
 
         if (!command) {
             this.showToast('Please enter or select a command', 'warning');
@@ -761,6 +958,20 @@ class WaproConsole {
             return;
         }
 
+        this.addLogEntry({
+            level: 'info',
+            message: `[PRINTER] Sending command to ${printerId}...`,
+            timestamp: new Date().toISOString()
+        });
+
+        // Log command details
+        const isLabel = command.includes('^XA');
+        this.addLogEntry({
+            level: 'info',
+            message: `[PRINTER] Command type: ${isLabel ? 'ZPL Label' : 'Status/Config'}, Size: ${command.length} bytes`,
+            timestamp: new Date().toISOString()
+        });
+
         try {
             const response = await fetch('/api/zebra/command', {
                 method: 'POST',
@@ -769,19 +980,42 @@ class WaproConsole {
             });
 
             const result = await response.json();
+            const elapsed = Date.now() - startTime;
 
             if (result.success) {
-                this.showToast(`Command sent to ${printerId.toUpperCase()}`, 'success');
+                this.showToast(`Command sent to ${printerId.toUpperCase()} (${elapsed}ms)`, 'success');
                 this.addLogEntry({
                     level: 'info',
-                    message: `Sent to ${printerId}: ${command.substring(0, 50)}${command.length > 50 ? '...' : ''}`,
+                    message: `[PRINTER] ✓ Command sent to ${printerId} successfully (${elapsed}ms)`,
                     timestamp: new Date().toISOString()
                 });
+                this.addLogEntry({
+                    level: 'info',
+                    message: `[PRINTER] Command: ${command.substring(0, 80)}${command.length > 80 ? '...' : ''}`,
+                    timestamp: new Date().toISOString()
+                });
+                if (result.response) {
+                    this.addLogEntry({
+                        level: 'info',
+                        message: `[PRINTER] Response: ${result.response}`,
+                        timestamp: new Date().toISOString()
+                    });
+                }
                 this.closeCommandModal();
             } else {
+                this.addLogEntry({
+                    level: 'error',
+                    message: `[PRINTER] ✗ Command failed: ${result.error || 'Unknown error'}`,
+                    timestamp: new Date().toISOString()
+                });
                 this.showToast('Command failed: ' + (result.error || 'Unknown error'), 'error');
             }
         } catch (error) {
+            this.addLogEntry({
+                level: 'error',
+                message: `[PRINTER] ✗ Exception: ${error.message}`,
+                timestamp: new Date().toISOString()
+            });
             this.showToast('Command execution failed', 'error');
         }
     }
