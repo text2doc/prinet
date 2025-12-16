@@ -297,11 +297,59 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     </div>
     
     <script>
+        // Global variables
+        let currentConfig = {};
+        let suggestions = {};
+        
         function showStatus(message, type) {
             const status = document.getElementById('status');
             status.textContent = message;
             status.className = 'status ' + type;
             setTimeout(() => { status.className = 'status'; }, 5000);
+        }
+        
+        // Discovery functions - must be defined early for onclick handlers
+        async function loadDevices() {
+            console.log('[webenv] Loading devices...');
+            try {
+                const response = await fetch('/devices');
+                const result = await response.json();
+                console.log('[webenv] Devices response:', result);
+                if (result.success) {
+                    displayDevices(result.devices);
+                    updateSuggestionsFromDevices(result.devices);
+                } else {
+                    document.getElementById('devicesList').innerHTML = 
+                        '<p style="color: #ef4444;">' + result.error + '</p>';
+                }
+            } catch (e) {
+                console.error('[webenv] Error:', e);
+                document.getElementById('devicesList').innerHTML = 
+                    '<p style="color: #ef4444;">Blad: ' + e.message + '</p>';
+            }
+        }
+        
+        async function discoverDevices() {
+            console.log('[webenv] Starting discovery...');
+            document.getElementById('devicesList').innerHTML = 
+                '<p style="color: #667eea;">Skanowanie sieci... (moze potrwac do 60 sekund)</p>';
+            try {
+                const response = await fetch('/discover');
+                const result = await response.json();
+                console.log('[webenv] Discovery response:', result);
+                if (result.success) {
+                    displayDevices(result.devices);
+                    updateSuggestionsFromDevices(result.devices);
+                    showStatus('Skanowanie zakonczone!', 'success');
+                } else {
+                    document.getElementById('devicesList').innerHTML = 
+                        '<p style="color: #ef4444;">' + result.error + '</p>';
+                }
+            } catch (e) {
+                console.error('[webenv] Discovery error:', e);
+                document.getElementById('devicesList').innerHTML = 
+                    '<p style="color: #ef4444;">Blad: ' + e.message + '</p>';
+            }
         }
         
         async function saveEnv() {
@@ -362,41 +410,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             }
         });
         
-        // Device discovery functions
-        async function loadDevices() {
-            try {
-                const response = await fetch('/devices');
-                const result = await response.json();
-                if (result.success) {
-                    displayDevices(result.devices);
-                } else {
-                    document.getElementById('devicesList').innerHTML = 
-                        '<p style="color: #ef4444;">' + result.error + '</p>';
-                }
-            } catch (e) {
-                document.getElementById('devicesList').innerHTML = 
-                    '<p style="color: #ef4444;">Blad: ' + e.message + '</p>';
-            }
-        }
-        
-        async function discoverDevices() {
-            document.getElementById('devicesList').innerHTML = 
-                '<p style="color: #667eea;">Skanowanie sieci... (moze potrwac do 60 sekund)</p>';
-            try {
-                const response = await fetch('/discover');
-                const result = await response.json();
-                if (result.success) {
-                    displayDevices(result.devices);
-                    showStatus('Skanowanie zakonczone!', 'success');
-                } else {
-                    document.getElementById('devicesList').innerHTML = 
-                        '<p style="color: #ef4444;">' + result.error + '</p>';
-                }
-            } catch (e) {
-                document.getElementById('devicesList').innerHTML = 
-                    '<p style="color: #ef4444;">Blad: ' + e.message + '</p>';
-            }
-        }
+        // Device discovery functions - defined later with suggestions support
         
         function displayDevices(data) {
             let html = '';
@@ -496,15 +510,9 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             showStatus('Zastosowano ' + host + ':' + port + ' - pamietaj zapisac!', 'success');
         }
         
-        // Auto-load devices on page load
-        loadDevices();
-        
         // ============================================
         // CONFIG TABLE FUNCTIONS
         // ============================================
-        
-        let currentConfig = {};
-        let suggestions = {};
         
         // Key parameters to show in form
         const configKeys = [
@@ -521,7 +529,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             { key: 'ZEBRA_2_NAME', label: 'Zebra 2 Name', type: 'zebra' },
             { key: 'RPI_GUI_EXTERNAL_PORT', label: 'RPI GUI Port', type: 'rpi' },
             { key: 'RPI_API_EXTERNAL_PORT', label: 'RPI API Port', type: 'rpi' },
-            { key: 'GRAFANA_PORT', label: 'Grafana Port', type: 'monitoring' },
+            { key: 'GRAFANA_PORT', label: 'Grafana Port', type: 'monitoring' }
         ];
         
         function parseEnvContent(content) {
@@ -658,51 +666,10 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             buildConfigTable();
         }
         
-        // Override loadDevices to also update suggestions
-        const originalLoadDevices = loadDevices;
-        loadDevices = async function() {
-            try {
-                const response = await fetch('/devices');
-                const result = await response.json();
-                if (result.success) {
-                    displayDevices(result.devices);
-                    updateSuggestionsFromDevices(result.devices);
-                } else {
-                    document.getElementById('devicesList').innerHTML = 
-                        '<p style="color: #ef4444;">' + result.error + '</p>';
-                    buildConfigTable();
-                }
-            } catch (e) {
-                document.getElementById('devicesList').innerHTML = 
-                    '<p style="color: #ef4444;">Blad: ' + e.message + '</p>';
-                buildConfigTable();
-            }
-        };
-        
-        // Override discoverDevices to also update suggestions
-        const originalDiscoverDevices = discoverDevices;
-        discoverDevices = async function() {
-            document.getElementById('devicesList').innerHTML = 
-                '<p style="color: #667eea;">Skanowanie sieci... (moze potrwac do 60 sekund)</p>';
-            try {
-                const response = await fetch('/discover');
-                const result = await response.json();
-                if (result.success) {
-                    displayDevices(result.devices);
-                    updateSuggestionsFromDevices(result.devices);
-                    showStatus('Skanowanie zakonczone! Sprawdz propozycje w tabeli.', 'success');
-                } else {
-                    document.getElementById('devicesList').innerHTML = 
-                        '<p style="color: #ef4444;">' + result.error + '</p>';
-                }
-            } catch (e) {
-                document.getElementById('devicesList').innerHTML = 
-                    '<p style="color: #ef4444;">Blad: ' + e.message + '</p>';
-            }
-        };
-        
-        // Build table on load
+        // Initialize on page load
+        console.log('[webenv] Initializing...');
         buildConfigTable();
+        loadDevices();
     </script>
 </body>
 </html>
