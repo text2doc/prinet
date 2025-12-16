@@ -155,10 +155,27 @@
                             </button>
                         </div>
                         <div class="command-section" id="zebra1Commands" style="display: none;">
-                            <textarea placeholder="Enter ZPL command..." rows="3"></textarea>
-                            <button class="btn btn-sm" onclick="executePrinterCommand('zebra-1')">
-                                <i class="fas fa-paper-plane"></i> Send
-                            </button>
+                            <textarea placeholder="Enter ZPL command..." rows="4"></textarea>
+                            <div class="command-actions">
+                                <button class="btn btn-sm" onclick="previewLabel('zebra-1')">
+                                    <i class="fas fa-eye"></i> Preview
+                                </button>
+                                <button class="btn btn-sm" onclick="executePrinterCommand('zebra-1')">
+                                    <i class="fas fa-paper-plane"></i> Send
+                                </button>
+                            </div>
+                        </div>
+                        <div class="label-emulator" id="zebra1Emulator">
+                            <div class="emulator-header">
+                                <span><i class="fas fa-tag"></i> Label Preview</span>
+                                <button class="btn btn-sm btn-secondary" onclick="clearEmulator('zebra-1')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="label-canvas" id="zebra1Canvas">
+                                <div class="empty-label">Send a ZPL command to see preview</div>
+                            </div>
+                            <div class="emulator-info" id="zebra1EmulatorInfo"></div>
                         </div>
                     </div>
                 </div>
@@ -189,10 +206,27 @@
                             </button>
                         </div>
                         <div class="command-section" id="zebra2Commands" style="display: none;">
-                            <textarea placeholder="Enter ZPL command..." rows="3"></textarea>
-                            <button class="btn btn-sm" onclick="executePrinterCommand('zebra-2')">
-                                <i class="fas fa-paper-plane"></i> Send
-                            </button>
+                            <textarea placeholder="Enter ZPL command..." rows="4"></textarea>
+                            <div class="command-actions">
+                                <button class="btn btn-sm" onclick="previewLabel('zebra-2')">
+                                    <i class="fas fa-eye"></i> Preview
+                                </button>
+                                <button class="btn btn-sm" onclick="executePrinterCommand('zebra-2')">
+                                    <i class="fas fa-paper-plane"></i> Send
+                                </button>
+                            </div>
+                        </div>
+                        <div class="label-emulator" id="zebra2Emulator">
+                            <div class="emulator-header">
+                                <span><i class="fas fa-tag"></i> Label Preview</span>
+                                <button class="btn btn-sm btn-secondary" onclick="clearEmulator('zebra-2')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="label-canvas" id="zebra2Canvas">
+                                <div class="empty-label">Send a ZPL command to see preview</div>
+                            </div>
+                            <div class="emulator-info" id="zebra2EmulatorInfo"></div>
                         </div>
                     </div>
                 </div>
@@ -200,11 +234,43 @@
 
             <div class="section">
                 <h3>Common ZPL Commands</h3>
-                <div class="commands-list">
-                    <button class="cmd-btn" onclick="insertCommand('~HI')">~HI (Host ID)</button>
-                    <button class="cmd-btn" onclick="insertCommand('~HS')">~HS (Status)</button>
-                    <button class="cmd-btn" onclick="insertCommand('^WD')">^WD (Config)</button>
-                    <button class="cmd-btn" onclick="insertCommand('PING')">PING</button>
+                <div class="commands-grid">
+                    <div class="commands-category">
+                        <h4><i class="fas fa-info-circle"></i> Status & Info</h4>
+                        <div class="commands-list">
+                            <button class="cmd-btn" onclick="insertCommand('~HI')">~HI (Host ID)</button>
+                            <button class="cmd-btn" onclick="insertCommand('~HS')">~HS (Host Status)</button>
+                            <button class="cmd-btn" onclick="insertCommand('~HD')">~HD (Head Diagnostic)</button>
+                            <button class="cmd-btn" onclick="insertCommand('PING')">PING</button>
+                        </div>
+                    </div>
+                    <div class="commands-category">
+                        <h4><i class="fas fa-cog"></i> Configuration</h4>
+                        <div class="commands-list">
+                            <button class="cmd-btn" onclick="insertCommand('^WD')">^WD (Config Dump)</button>
+                            <button class="cmd-btn" onclick="insertCommand('~JC')">~JC (Set Clock)</button>
+                            <button class="cmd-btn" onclick="insertCommand('^JUS')">^JUS (Save Settings)</button>
+                            <button class="cmd-btn" onclick="insertCommand('~JR')">~JR (Power On Reset)</button>
+                        </div>
+                    </div>
+                    <div class="commands-category">
+                        <h4><i class="fas fa-tag"></i> Sample Labels</h4>
+                        <div class="commands-list">
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.simple)">Simple Text</button>
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.barcode)">Barcode EAN-13</button>
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.qrcode)">QR Code</button>
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.product)">Product Label</button>
+                        </div>
+                    </div>
+                    <div class="commands-category">
+                        <h4><i class="fas fa-shapes"></i> Graphics</h4>
+                        <div class="commands-list">
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.box)">Box/Frame</button>
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.line)">Lines</button>
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.multifield)">Multi-field</button>
+                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.warehouse)">Warehouse Label</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -13,6 +13,31 @@ GO
 USE WAPROMAG_TEST;
 GO
 
+-- Tabela produktów (musi być przed innymi tabelami które ją referencjonują)
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Produkty' AND xtype='U')
+BEGIN
+    CREATE TABLE Produkty (
+        ID int IDENTITY(1,1) PRIMARY KEY,
+        Kod nvarchar(30) NOT NULL UNIQUE,
+        KodKreskowy nvarchar(50),
+        Nazwa nvarchar(200) NOT NULL,
+        Opis nvarchar(500),
+        Kategoria nvarchar(50),
+        JednostkaMiary nvarchar(10) DEFAULT 'szt',
+        CenaZakupu decimal(10,2) DEFAULT 0,
+        CenaSprzedazy decimal(10,2) DEFAULT 0,
+        StanMagazynowy decimal(10,3) DEFAULT 0,
+        StanMinimalny decimal(10,3) DEFAULT 0,
+        StawkaVAT decimal(5,2) DEFAULT 23.00,
+        DataUtworzenia datetime DEFAULT GETDATE(),
+        DataModyfikacji datetime DEFAULT GETDATE(),
+        CzyAktywny bit DEFAULT 1,
+        Dostawca nvarchar(100),
+        Uwagi nvarchar(500)
+    );
+END
+GO
+
 -- Tabela kontrahentów
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Kontrahenci' AND xtype='U')
 BEGIN
@@ -333,28 +358,4 @@ BEGIN
 END
 GO
 
-PRINT 'Baza danych WAPROMAG_TEST została pomyślnie utworzona i wypełniona danymi testowymi';ktywny bit DEFAULT 1,
-        Uwagi nvarchar(500)
-    );
-END
-GO
-
--- Tabela produktów
-IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Produkty' AND xtype='U')
-BEGIN
-    CREATE TABLE Produkty (
-        ID int IDENTITY(1,1) PRIMARY KEY,
-        Kod nvarchar(30) NOT NULL UNIQUE,
-        KodKreskowy nvarchar(50),
-        Nazwa nvarchar(200) NOT NULL,
-        Opis nvarchar(500),
-        Kategoria nvarchar(50),
-        JednostkaMiary nvarchar(10) DEFAULT 'szt',
-        CenaZakupu decimal(10,2) DEFAULT 0,
-        CenaSprzedazy decimal(10,2) DEFAULT 0,
-        StanMagazynowy decimal(10,3) DEFAULT 0,
-        StanMinimalny decimal(10,3) DEFAULT 0,
-        StawkaVAT decimal(5,2) DEFAULT 23.00,
-        DataUtworzenia datetime DEFAULT GETDATE(),
-        DataModyfikacji datetime DEFAULT GETDATE(),
-        CzyA
+PRINT 'Baza danych WAPROMAG_TEST została pomyślnie utworzona i wypełniona danymi testowymi';
