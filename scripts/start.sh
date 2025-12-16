@@ -1,6 +1,5 @@
-
-# scripts/start.sh
 #!/bin/bash
+# scripts/start.sh
 set -e
 
 # Kolory dla lepszej czytelności
@@ -22,6 +21,11 @@ if [ ! -f .env ]; then
     echoc "${RED}❌ Brak pliku .env - uruchom './scripts/setup.sh' najpierw${NC}"
     exit 1
 fi
+
+# Załaduj zmienne z .env
+set -a
+source .env 2>/dev/null || true
+set +a
 
 # Preflight checks: docker/compose availability, port occupancy
 preflight() {
@@ -255,25 +259,29 @@ echo ""
 echo "🖥️  Testowanie RPI Mock Server:"
 TOTAL_TESTS=$((TOTAL_TESTS + 4))
 
-if wait_for_service "localhost" "8080" "RPI GUI Port"; then
+# Porty z .env lub domyślne
+RPI_GUI_PORT=${RPI_GUI_EXTERNAL_PORT:-8082}
+RPI_API_PORT=${RPI_API_EXTERNAL_PORT:-8081}
+
+if wait_for_service "localhost" "$RPI_GUI_PORT" "RPI GUI Port"; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 
-if wait_for_service "localhost" "8081" "RPI API Port"; then
+if wait_for_service "localhost" "$RPI_API_PORT" "RPI API Port"; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 
-if test_http_endpoint "http://localhost:8080" "RPI GUI Interface"; then
+if test_http_endpoint "http://localhost:$RPI_GUI_PORT" "RPI GUI Interface"; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 
-if test_http_endpoint "http://localhost:8081/health" "RPI API Health"; then
+if test_http_endpoint "http://localhost:$RPI_API_PORT/health" "RPI API Health"; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -391,12 +399,12 @@ echo "════════════════════════�
 # ============================================================================
 echo ""
 echo "🌐 Dostępne interfejsy:"
-echo "   RPI Server GUI:      http://localhost:8080"
-echo "   RPI Server API:      http://localhost:8081"
-echo "   ZEBRA Printer 1:     http://localhost:8091"
-echo "   ZEBRA Printer 2:     http://localhost:8092"
-echo "   Monitoring:          http://localhost:3000"
-echo "   MSSQL WAPROMAG:      localhost:1433"
+echo "   RPI Server GUI:      http://localhost:${RPI_GUI_EXTERNAL_PORT:-8082}"
+echo "   RPI Server API:      http://localhost:${RPI_API_EXTERNAL_PORT:-8081}"
+echo "   ZEBRA Printer 1:     http://localhost:${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}"
+echo "   ZEBRA Printer 2:     http://localhost:${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}"
+echo "   Monitoring:          http://localhost:${GRAFANA_PORT:-3000}"
+echo "   MSSQL WAPROMAG:      localhost:${MSSQL_EXTERNAL_PORT:-1433}"
 
 echo ""
 if [ $FAILED_TESTS -eq 0 ]; then
