@@ -2,6 +2,12 @@
 # scripts/start.sh
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Przejdz do katalogu projektu
+cd "$PROJECT_DIR"
+
 # Kolory dla lepszej czytelności
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,12 +21,45 @@ echoc() {
 }
 
 echo "[*] Uruchamianie WAPRO Network Mock..."
+echo "[i] Katalog: $PROJECT_DIR"
+
+# Funkcja naprawy Docker
+fix_docker_quick() {
+    # Czy Docker daemon dziala?
+    if ! docker info &>/dev/null 2>&1; then
+        # Sprobuj z sudo
+        if sudo docker info &>/dev/null 2>&1; then
+            echoc "${YELLOW}[!] Docker wymaga sudo - uruchamiam z sudo...${NC}"
+            USE_SUDO="sudo"
+        else
+            # Sprobuj uruchomic daemon
+            echoc "${YELLOW}[!] Docker daemon nie dziala - probuje uruchomic...${NC}"
+            sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+            sleep 2
+            
+            if docker info &>/dev/null 2>&1; then
+                USE_SUDO=""
+            elif sudo docker info &>/dev/null 2>&1; then
+                USE_SUDO="sudo"
+            else
+                echoc "${RED}[X] Nie mozna uruchomic Docker${NC}"
+                echoc "${YELLOW}[!] Sprawdz: sudo systemctl status docker${NC}"
+                exit 1
+            fi
+        fi
+    else
+        USE_SUDO=""
+    fi
+}
 
 # Sprawdzenie konfiguracji
 if [ ! -f .env ]; then
-    echoc "${RED}[X] Brak pliku .env - uruchom './scripts/setup.sh' najpierw${NC}"
+    echoc "${RED}[X] Brak pliku .env - uruchom 'make setup' najpierw${NC}"
     exit 1
 fi
+
+# Napraw Docker jesli potrzeba
+fix_docker_quick
 
 # Załaduj zmienne z .env
 set -a
@@ -30,11 +69,11 @@ set +a
 # Preflight checks: docker/compose availability, port occupancy
 preflight() {
     echoc "${BLUE}[i] Preflight: sprawdzam srodowisko...${NC}"
-    if ! docker info >/dev/null 2>&1; then
+    if ! $USE_SUDO docker info >/dev/null 2>&1; then
         echoc "${RED}[X] Docker nie jest uruchomiony${NC}"; exit 1; fi
-    if ! docker-compose version >/dev/null 2>&1; then
+    if ! $USE_SUDO docker-compose version >/dev/null 2>&1; then
         echoc "${RED}[X] Brak docker-compose w PATH${NC}"; exit 1; fi
-    if ! docker-compose config >/dev/null 2>&1; then
+    if ! $USE_SUDO docker-compose config >/dev/null 2>&1; then
         echoc "${RED}[X] Blad walidacji docker-compose.yml${NC}"; exit 1; fi
     if [ -n "${COMPOSE_BAKE}" ]; then
         echoc "${GREEN}[i] COMPOSE_BAKE=${COMPOSE_BAKE}${NC}"
@@ -48,12 +87,12 @@ preflight() {
 preflight
 
 # Uruchomienie wszystkich serwisów
-echo "[*] Uruchamianie kontenerów..."
-docker-compose up -d
+echo "[*] Uruchamianie kontenerow..."
+$USE_SUDO docker-compose up -d
 
 # Sprawdzenie statusu
-echo "[i] Status serwisów:"
-docker-compose ps
+echo "[i] Status serwisow:"
+$USE_SUDO docker-compose ps
 
 echo ""
 echo "[.] Oczekiwanie na uruchomienie serwisów..."

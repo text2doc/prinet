@@ -84,18 +84,18 @@ logs-sql: ## Wyświetla logi SQL Server
 	@docker-compose logs -f mssql-wapromag
 
 build: ## Buduje wszystkie obrazy
-	@echo "$(YELLOW)🔨 Budowanie obrazów...$(RESET)"
+	@echo "$(YELLOW)[B] Budowanie obrazów...$(RESET)"
 	@docker-compose build
 
 rebuild: ## Przebudowuje wszystkie obrazy (bez cache)
-	@echo "$(YELLOW)🔨 Przebudowywanie obrazów...$(RESET)"
+	@echo "$(YELLOW)[B] Przebudowywanie obrazów...$(RESET)"
 	@docker-compose build --no-cache
 
-status: ## Pokazuje status wszystkich serwisów
-	@echo "$(BLUE)[i] Status serwisów:$(RESET)"
-	@docker-compose ps
+status: ## Pokazuje status wszystkich serwisow
+	@echo "$(BLUE)[i] Status serwisow:$(RESET)"
+	@docker-compose ps 2>/dev/null || sudo docker-compose ps
 	@echo ""
-	@echo "$(BLUE)🌐 Dostępne interfejsy (porty z .env):$(RESET)"
+	@echo "$(BLUE)[i] Dostepne interfejsy (porty z .env):$(RESET)"
 	@echo "  RPI Server GUI:      $(GREEN)http://localhost:$${RPI_GUI_EXTERNAL_PORT:-8082}$(RESET)"
 	@echo "  RPI Server API:      $(GREEN)http://localhost:$${RPI_API_EXTERNAL_PORT:-8081}$(RESET)"
 	@echo "  ZEBRA Printer 1:     $(GREEN)http://localhost:$${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}$(RESET)"
@@ -104,7 +104,7 @@ status: ## Pokazuje status wszystkich serwisów
 	@echo "  MSSQL WAPROMAG:      $(GREEN)localhost:$${MSSQL_EXTERNAL_PORT:-1433}$(RESET)"
 
 health: ## Sprawdza stan zdrowia wszystkich serwisów
-	@echo "$(BLUE)🏥 Health Check:$(RESET)"
+	@echo "$(BLUE)[H] Health Check:$(RESET)"
 	@curl -s http://localhost:$${RPI_GUI_EXTERNAL_PORT:-8082}/health | jq . || echo "RPI Server: $(RED)OFFLINE$(RESET)"
 	@curl -s http://localhost:$${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}/api/status | jq . || echo "ZEBRA-1: $(RED)OFFLINE$(RESET)"
 	@curl -s http://localhost:$${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}/api/status | jq . || echo "ZEBRA-2: $(RED)OFFLINE$(RESET)"
@@ -114,7 +114,7 @@ backup-db: ## Tworzy backup bazy danych
 	@./scripts/backup-db.sh
 
 restore-db: ## Przywraca backup bazy danych
-	@echo "$(YELLOW)🔄 Przywracanie bazy danych...$(RESET)"
+	@echo "$(YELLOW)[R] Przywracanie bazy danych...$(RESET)"
 	@./scripts/restore-db.sh
 
 shell-rpi: ## Łączy z terminalem RPI Server
