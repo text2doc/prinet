@@ -217,7 +217,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                     <span id="fileStatus"></span>
                 </div>
                 <div class="panel-body">
-                    <textarea id="envEditor" placeholder="Ladowanie...">{env_content}</textarea>
+                    <textarea id="envEditor" placeholder="Ladowanie...">{{env_content}}</textarea>
                     <div class="actions">
                         <button class="btn btn-primary" onclick="saveEnv()">Zapisz .env</button>
                         <button class="btn btn-secondary" onclick="reloadEnv()">Odswierz</button>
@@ -232,7 +232,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                     <h2>.env.example <span class="badge">tylko odczyt</span></h2>
                 </div>
                 <div class="panel-body">
-                    <textarea id="exampleViewer" readonly style="opacity: 0.7;">{example_content}</textarea>
+                    <textarea id="exampleViewer" readonly style="opacity: 0.7;">{{example_content}}</textarea>
                 </div>
             </div>
         </div>
@@ -250,7 +250,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         </div>
         
         <footer>
-            WAPRO Network Mock | Port: {port} | Plik: {env_path}
+            WAPRO Network Mock | Port: {{port}} | Plik: {{env_path}}
         </footer>
     </div>
     
@@ -354,11 +354,14 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
             env_content = self.read_file(ENV_FILE)
             example_content = self.read_file(ENV_EXAMPLE)
             
-            html = HTML_TEMPLATE.format(
-                env_content=env_content,
-                example_content=example_content,
-                port=self.server.server_port,
-                env_path=ENV_FILE
+            html = HTML_TEMPLATE.replace(
+                '{{env_content}}', env_content
+            ).replace(
+                '{{example_content}}', example_content
+            ).replace(
+                '{{port}}', str(self.server.server_port)
+            ).replace(
+                '{{env_path}}', ENV_FILE
             )
             self.send_html(html)
         

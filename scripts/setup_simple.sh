@@ -22,6 +22,54 @@ echo ""
 
 cd "$PROJECT_DIR"
 
+# Funkcja naprawy Docker
+fix_docker() {
+    echo -e "${BLUE}[i]${NC} Sprawdzanie Docker..."
+    
+    # 1. Czy Docker jest zainstalowany?
+    if ! command -v docker &>/dev/null; then
+        echo -e "  ${RED}[X]${NC} Docker nie zainstalowany"
+        echo -e "  ${YELLOW}[!]${NC} Uruchom: make install"
+        return 1
+    fi
+    
+    # 2. Czy Docker daemon dziala?
+    if ! sudo docker info &>/dev/null 2>&1; then
+        echo -e "  ${YELLOW}[!]${NC} Docker daemon nie dziala - uruchamiam..."
+        sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+        sleep 2
+    fi
+    
+    if sudo docker info &>/dev/null 2>&1; then
+        echo -e "  ${GREEN}[+]${NC} Docker daemon dziala"
+    else
+        echo -e "  ${RED}[X]${NC} Nie mozna uruchomic Docker daemon"
+        return 1
+    fi
+    
+    # 3. Czy uzytkownik jest w grupie docker?
+    CURRENT_USER="${SUDO_USER:-$USER}"
+    if ! groups "$CURRENT_USER" 2>/dev/null | grep -q docker; then
+        echo -e "  ${YELLOW}[!]${NC} Dodawanie $CURRENT_USER do grupy docker..."
+        sudo usermod -aG docker "$CURRENT_USER" 2>/dev/null || true
+        echo -e "  ${YELLOW}[!]${NC} WAZNE: Wyloguj sie i zaloguj ponownie!"
+        echo -e "  ${YELLOW}[!]${NC} Lub uruchom: newgrp docker"
+    fi
+    
+    # 4. Czy mozna uzyc docker bez sudo?
+    if docker info &>/dev/null 2>&1; then
+        echo -e "  ${GREEN}[+]${NC} Docker dziala bez sudo"
+    else
+        echo -e "  ${YELLOW}[!]${NC} Docker wymaga sudo lub ponownego zalogowania"
+        echo -e "  ${YELLOW}[!]${NC} Tymczasowo: newgrp docker"
+    fi
+    
+    return 0
+}
+
+# Uruchom naprawe Docker
+fix_docker
+
 # 1. Plik .env
 echo -e "${BLUE}[1/5]${NC} Konfiguracja .env..."
 if [ ! -f .env ]; then
