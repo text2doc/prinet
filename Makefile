@@ -24,27 +24,26 @@ help: ## Wyświetla pomoc
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -v "install\|setup\|start\|stop\|restart" | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-15s$(RESET) %s\n", $$1, $$2}'
 
 install: ## Instaluje Docker i wszystkie zależności (dla RPi/Debian/Ubuntu)
-	@echo "$(YELLOW)📦 Instalacja zależności systemowych...$(RESET)"
+	@echo "$(YELLOW)[i] Instalacja zależności systemowych...$(RESET)"
 	@chmod +x scripts/*.sh 2>/dev/null || true
 	@sudo ./scripts/install.sh
 
-setup: ## Konfiguruje środowisko (tworzy .env, buduje obrazy)
-	@echo "$(YELLOW)🚀 Konfiguracja środowiska...$(RESET)"
+setup: ## Konfiguruje srodowisko (tworzy .env, buduje obrazy)
 	@chmod +x scripts/*.sh 2>/dev/null || true
-	@./scripts/setup.sh
+	@./scripts/setup_simple.sh
 
 start: ## Uruchamia wszystkie serwisy
-	@echo "$(GREEN)🚀 Uruchamianie serwisów...$(RESET)"
+	@echo "$(GREEN)[*] Uruchamianie serwisów...$(RESET)"
 	@./scripts/start.sh
 
 stop: ## Zatrzymuje wszystkie serwisy
-	@echo "$(RED)🛑 Zatrzymywanie serwisów...$(RESET)"
+	@echo "$(RED)[X] Zatrzymywanie serwisów...$(RESET)"
 	@./scripts/stop.sh
 
 restart: stop start ## Restartuje wszystkie serwisy
 
 clean: ## Czyści środowisko (usuwa kontenery, obrazy, wolumeny)
-	@echo "$(RED)🧹 Czyszczenie środowiska...$(RESET)"
+	@echo "$(RED)[-] Czyszczenie środowiska...$(RESET)"
 	@docker-compose down -v --remove-orphans
 	@docker system prune -f
 	@docker volume prune -f
@@ -93,7 +92,7 @@ rebuild: ## Przebudowuje wszystkie obrazy (bez cache)
 	@docker-compose build --no-cache
 
 status: ## Pokazuje status wszystkich serwisów
-	@echo "$(BLUE)📊 Status serwisów:$(RESET)"
+	@echo "$(BLUE)[i] Status serwisów:$(RESET)"
 	@docker-compose ps
 	@echo ""
 	@echo "$(BLUE)🌐 Dostępne interfejsy (porty z .env):$(RESET)"
@@ -111,7 +110,7 @@ health: ## Sprawdza stan zdrowia wszystkich serwisów
 	@curl -s http://localhost:$${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}/api/status | jq . || echo "ZEBRA-2: $(RED)OFFLINE$(RESET)"
 
 backup-db: ## Tworzy backup bazy danych
-	@echo "$(YELLOW)💾 Tworzenie backupu bazy danych...$(RESET)"
+	@echo "$(YELLOW)[D] Tworzenie backupu bazy danych...$(RESET)"
 	@./scripts/backup-db.sh
 
 restore-db: ## Przywraca backup bazy danych
