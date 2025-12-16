@@ -26,8 +26,26 @@ fi
 
 # Sprawdzenie czy docker daemon działa
 if ! docker info &> /dev/null; then
-    echo -e "${RED}❌ Docker daemon nie działa. Uruchom: sudo systemctl start docker${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠️  Docker daemon nie działa. Próbuję uruchomić...${NC}"
+    
+    # Próba uruchomienia Docker
+    if sudo systemctl start docker 2>/dev/null; then
+        sleep 2
+        if docker info &> /dev/null; then
+            echo -e "${GREEN}✓ Docker daemon uruchomiony${NC}"
+            # Włącz autostart
+            sudo systemctl enable docker 2>/dev/null || true
+        else
+            echo -e "${RED}❌ Nie udało się uruchomić Docker daemon${NC}"
+            echo -e "${YELLOW}Spróbuj ręcznie: sudo systemctl start docker${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${RED}❌ Docker daemon nie działa${NC}"
+        echo -e "${YELLOW}Uruchom: sudo systemctl start docker${NC}"
+        echo -e "${YELLOW}Lub zainstaluj Docker: make install${NC}"
+        exit 1
+    fi
 fi
 
 # Tworzenie pliku .env jeśli nie istnieje
