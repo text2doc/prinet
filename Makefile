@@ -83,15 +83,39 @@ clean: ## Czyści środowisko (usuwa kontenery, obrazy, wolumeny)
 	@docker volume prune -f
 
 test: ## Uruchamia wszystkie testy
-	@echo "$(BLUE)🧪 Uruchamianie testów...$(RESET)"
+	@echo "$(BLUE)[T] Uruchamianie testów...$(RESET)"
 	@./scripts/test-all.sh
 
 test-e2e: ## Uruchamia testy E2E wszystkich usług
-	@echo "$(BLUE)🧪 Uruchamianie testów E2E...$(RESET)"
+	@echo "$(BLUE)[T] Uruchamianie testów E2E...$(RESET)"
 	@./scripts/test-e2e.sh
 
+test-docker: ## Testuje konfigurację Docker
+	@echo "$(BLUE)[T] Testowanie Docker...$(RESET)"
+	@echo -n "  Docker daemon: "; docker info >/dev/null 2>&1 && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  Docker Compose: "; docker-compose version >/dev/null 2>&1 && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  Network (192.168.8.0/24): "; docker network inspect prinet_wapro-network >/dev/null 2>&1 && echo "$(GREEN)[+] OK$(RESET)" || echo "$(YELLOW)[?] Nie istnieje$(RESET)"
+	@echo "$(BLUE)[i] Kontenery:$(RESET)"
+	@docker ps --format "  {{.Names}}: {{.Status}}" 2>/dev/null | grep -E "rpi|zebra|mssql" || echo "  Brak uruchomionych kontenerów"
+
+test-app: ## Testuje działanie aplikacji (health checks)
+	@echo "$(BLUE)[T] Testowanie aplikacji...$(RESET)"
+	@echo -n "  RPI Server GUI (8082): "; curl -sf http://localhost:$${RPI_GUI_EXTERNAL_PORT:-8082}/health >/dev/null && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  RPI Server API (8081): "; curl -sf http://localhost:$${RPI_API_EXTERNAL_PORT:-8081}/health >/dev/null && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  ZEBRA-1 Web (8091): "; curl -sf http://localhost:$${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}/ >/dev/null && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  ZEBRA-1 Socket (9100): "; nc -z localhost $${ZEBRA_1_EXTERNAL_SOCKET_PORT:-9100} 2>/dev/null && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  ZEBRA-2 Web (8092): "; curl -sf http://localhost:$${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}/ >/dev/null && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  ZEBRA-2 Socket (9101): "; nc -z localhost $${ZEBRA_2_EXTERNAL_SOCKET_PORT:-9101} 2>/dev/null && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+	@echo -n "  MSSQL (1433): "; nc -z localhost $${MSSQL_EXTERNAL_PORT:-1433} 2>/dev/null && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
+
+test-network: ## Testuje konfigurację sieci Docker
+	@echo "$(BLUE)[T] Testowanie sieci Docker...$(RESET)"
+	@docker network inspect prinet_wapro-network --format '{{range .IPAM.Config}}Subnet: {{.Subnet}}{{end}}' 2>/dev/null || echo "$(RED)[-] Sieć nie istnieje$(RESET)"
+	@echo "$(BLUE)[i] Przypisane adresy IP:$(RESET)"
+	@docker network inspect prinet_wapro-network --format '{{range .Containers}}  {{.Name}}: {{.IPv4Address}}{{println}}{{end}}' 2>/dev/null || true
+
 test-zebra: ## Testuje tylko drukarki ZEBRA
-	@echo "$(BLUE)🖨️  Testowanie drukarek ZEBRA...$(RESET)"
+	@echo "$(BLUE)[P] Testowanie drukarek ZEBRA...$(RESET)"
 	@docker-compose exec test-runner python -m pytest tests/test_zebra_connectivity.py -v
 
 test-sql: ## Testuje tylko połączenie SQL

@@ -20,3 +20,11 @@ Poetry could not find a pyproject.toml file in /home/tom/github/text2doc/prinet 
 
 
   192.168.8.187   d8:3a:dd:d4:0d:09      2     120  Raspberry Pi Trading Ltd
+
+
+
+
+  zastoosować numery IP dla drukarek
+
+
+  zmienić nazwy hosta na numery IP w docker i .env hostów dla drukarek od 192.168.8.165 do 192.168.8.166 oraz dla mssql 192.168.8.20

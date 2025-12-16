@@ -22,7 +22,8 @@ services:
       - mssql_wapromag_data:/var/opt/mssql
       - ./mssql-wapromag/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - wapro-network
+      wapro-network:
+        ipv4_address: 192.168.8.20
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD:-WapromagPass123!} -Q 'SELECT 1' -C || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD:-WapromagPass123!} -Q 'SELECT 1'"]
       interval: 30s
@@ -68,7 +69,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     user: "0:0"
     networks:
-      - wapro-network
+      wapro-network:
+        ipv4_address: 192.168.8.100
     command: ["/bin/sh", "-c", "if [ ! -f node_modules/socket.io/package.json ]; then echo 'Installing dependencies (runtime as root)...' && mkdir -p node_modules && npm install --production --no-audit --no-fund; fi; node server.js"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:${RPI_GUI_INTERNAL_PORT:-8080}/health || curl -fs http://localhost:${RPI_API_INTERNAL_PORT:-8081}/health"]
@@ -95,7 +97,8 @@ services:
       - PRINTER_SOCKET_PORT=9100
       - FLASK_RUN_PORT=${ZEBRA_1_INTERNAL_WEB_PORT:-8080}
     networks:
-      - wapro-network
+      wapro-network:
+        ipv4_address: 192.168.8.165
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "9100"]
       interval: 15s
@@ -122,7 +125,8 @@ services:
       - PRINTER_SOCKET_PORT=9100
       - FLASK_RUN_PORT=${ZEBRA_2_INTERNAL_WEB_PORT:-8080}
     networks:
-      - wapro-network
+      wapro-network:
+        ipv4_address: 192.168.8.166
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "9100"]
       interval: 15s
@@ -151,56 +155,10 @@ services:
       - ./tests:/tests
       - ./reports:/reports
     networks:
-      - wapro-network
+      wapro-network:
+        ipv4_address: 192.168.8.200
     profiles:
       - testing
-
-  # ---------------------------------------------------------------------------
-  # PROMETHEUS (Monitoring)
-  # ---------------------------------------------------------------------------
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: ${PROMETHEUS_CONTAINER_NAME:-wapro-prometheus}
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    volumes:
-      - ./monitoring/prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    networks:
-      - wapro-network
-    restart: unless-stopped
-    profiles:
-      - monitoring
-
-  # ---------------------------------------------------------------------------
-  # GRAFANA (Monitoring Dashboard)
-  # ---------------------------------------------------------------------------
-  grafana:
-    image: grafana/grafana:latest
-    container_name: ${GRAFANA_CONTAINER_NAME:-wapro-grafana}
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
-    networks:
-      - wapro-network
-    depends_on:
-      - prometheus
-    restart: unless-stopped
-    profiles:
-      - monitoring
 
 # =============================================================================
 # NETWORKS

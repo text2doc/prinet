@@ -300,6 +300,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         // Global variables
         let currentConfig = {};
         let suggestions = {};
+        let discoveredData = null;
         
         function showStatus(message, type) {
             const status = document.getElementById('status');
@@ -412,7 +413,30 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         
         // Device discovery functions - defined later with suggestions support
         
+        function selectDevice(type, index) {
+            if (!discoveredData || !discoveredData.devices) return;
+            
+            let device = null;
+            let deviceNum = 1;
+            
+            if (type === 'zebra') {
+                if (discoveredData.devices.zebra_printers && discoveredData.devices.zebra_printers[index]) {
+                    device = discoveredData.devices.zebra_printers[index];
+                    deviceNum = index + 1;
+                }
+            } else if (type === 'mssql') {
+                if (discoveredData.devices.mssql_servers && discoveredData.devices.mssql_servers[index]) {
+                    device = discoveredData.devices.mssql_servers[index];
+                }
+            }
+            
+            if (device) {
+                applyDevice(type, deviceNum, device.host, device.port);
+            }
+        }
+
         function displayDevices(data) {
+            discoveredData = { devices: data };
             let html = '';
             let total = 0;
             
@@ -421,7 +445,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 html += '<h4 style="color: #22c55e; margin: 10px 0;">Drukarki Zebra</h4>';
                 html += '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
                 data.devices.zebra_printers.forEach((p, i) => {
-                    html += `<div style="background: #2d2d3d; padding: 10px; border-radius: 5px; cursor: pointer;" onclick="applyDevice('zebra', ${i+1}, '${p.host}', ${p.port})">`;
+                    html += '<div style="background: #2d2d3d; padding: 10px; border-radius: 5px; cursor: pointer;" onclick="selectDevice(\\'zebra\\', ' + i + ')">';
                     html += '<strong>' + p.host + ':' + p.port + '</strong>';
                     if (p.model) html += '<br><small>' + p.model + '</small>';
                     html += '<br><small style="color: #667eea;">Kliknij aby uzyc</small>';
@@ -435,8 +459,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             if (data.devices && data.devices.mssql_servers && data.devices.mssql_servers.length > 0) {
                 html += '<h4 style="color: #3b82f6; margin: 10px 0;">Serwery MSSQL</h4>';
                 html += '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
-                data.devices.mssql_servers.forEach(s => {
-                    html += `<div style="background: #2d2d3d; padding: 10px; border-radius: 5px; cursor: pointer;" onclick="applyDevice('mssql', 1, '${s.host}', ${s.port})">`;
+                data.devices.mssql_servers.forEach((s, i) => {
+                    html += '<div style="background: #2d2d3d; padding: 10px; border-radius: 5px; cursor: pointer;" onclick="selectDevice(\\'mssql\\', ' + i + ')">';
                     html += '<strong>' + s.host + ':' + s.port + '</strong>';
                     html += '<br><small style="color: #667eea;">Kliknij aby uzyc</small>';
                     html += '</div>';

@@ -428,6 +428,120 @@ install_docker_snap() {
     fi
 }
 
+# Instalacja MSSQL Tools (sqlcmd)
+install_mssql_tools() {
+    echo ""
+    log INFO "=== INSTALACJA MSSQL TOOLS ==="
+    
+    # Sprawdzenie czy sqlcmd jest już zainstalowany
+    if command -v sqlcmd &>/dev/null; then
+        log OK "MSSQL Tools już zainstalowane"
+        return 0
+    fi
+    
+    # Sprawdzenie czy jest w PATH z mssql-tools18 lub mssql-tools
+    if [ -f /opt/mssql-tools18/bin/sqlcmd ] || [ -f /opt/mssql-tools/bin/sqlcmd ]; then
+        log OK "MSSQL Tools już zainstalowane (w /opt)"
+        return 0
+    fi
+    
+    log STEP "Instalacja zależności..."
+    apt-get install -y -qq curl gnupg2 apt-transport-https >> "$LOG_FILE" 2>&1 || true
+    
+    # Określ wersję Debiana/Ubuntu
+    local os_version="$VERSION"
+    local distro_path=""
+    
+    case "$OS" in
+        debian)
+            case "$os_version" in
+                12*) distro_path="debian/12" ;;
+                11*) distro_path="debian/11" ;;
+                10*) distro_path="debian/10" ;;
+                *) distro_path="debian/12" ;;  # domyślnie najnowszy
+            esac
+            ;;
+        ubuntu)
+            case "$os_version" in
+                24*) distro_path="ubuntu/24.04" ;;
+                22*) distro_path="ubuntu/22.04" ;;
+                20*) distro_path="ubuntu/20.04" ;;
+                *) distro_path="ubuntu/22.04" ;;  # domyślnie LTS
+            esac
+            ;;
+        raspbian)
+            # Raspbian bazuje na Debianie
+            distro_path="debian/12"
+            ;;
+        *)
+            log WARN "Nieobsługiwana dystrybucja: $OS - próbuję Debian 12"
+            distro_path="debian/12"
+            ;;
+    esac
+    
+    log STEP "Dodawanie klucza Microsoft GPG..."
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc 2>> "$LOG_FILE" | apt-key add - >> "$LOG_FILE" 2>&1 || {
+        log WARN "Nie udało się dodać klucza GPG (stara metoda)"
+        # Nowa metoda z gpg
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc 2>> "$LOG_FILE" | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg 2>> "$LOG_FILE" || true
+    }
+    
+    log STEP "Dodawanie repozytorium Microsoft ($distro_path)..."
+    curl -fsSL "https://packages.microsoft.com/config/${distro_path}/prod.list" 2>> "$LOG_FILE" | tee /etc/apt/sources.list.d/mssql-release.list >> "$LOG_FILE" 2>&1 || {
+        log WARN "Nie udało się pobrać listy repozytoriów"
+        return 1
+    }
+    
+    log STEP "Aktualizacja listy pakietów..."
+    apt-get update -qq >> "$LOG_FILE" 2>&1 || true
+    
+    log STEP "Instalacja mssql-tools i unixodbc-dev..."
+    # ACCEPT_EULA=Y jest wymagane dla mssql-tools
+    ACCEPT_EULA=Y apt-get install -y -qq mssql-tools18 unixodbc-dev >> "$LOG_FILE" 2>&1 || {
+        log WARN "mssql-tools18 niedostępne, próbuję mssql-tools..."
+        ACCEPT_EULA=Y apt-get install -y -qq mssql-tools unixodbc-dev >> "$LOG_FILE" 2>&1 || {
+            log ERROR "Nie udało się zainstalować MSSQL Tools"
+            return 1
+        }
+    }
+    
+    # Dodanie do PATH
+    log STEP "Konfiguracja PATH..."
+    local mssql_path=""
+    if [ -d /opt/mssql-tools18/bin ]; then
+        mssql_path="/opt/mssql-tools18/bin"
+    elif [ -d /opt/mssql-tools/bin ]; then
+        mssql_path="/opt/mssql-tools/bin"
+    fi
+    
+    if [ -n "$mssql_path" ]; then
+        # Dodaj do /etc/profile.d dla wszystkich użytkowników
+        echo "export PATH=\"\$PATH:$mssql_path\"" > /etc/profile.d/mssql-tools.sh
+        chmod +x /etc/profile.d/mssql-tools.sh
+        
+        # Dodaj do .bashrc użytkownika
+        if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ]; then
+            local user_home=$(eval echo ~$REAL_USER)
+            if [ -f "$user_home/.bashrc" ]; then
+                if ! grep -q "mssql-tools" "$user_home/.bashrc" 2>/dev/null; then
+                    echo "" >> "$user_home/.bashrc"
+                    echo "# MSSQL Tools" >> "$user_home/.bashrc"
+                    echo "export PATH=\"\$PATH:$mssql_path\"" >> "$user_home/.bashrc"
+                fi
+            fi
+        fi
+        
+        # Eksport dla bieżącej sesji
+        export PATH="$PATH:$mssql_path"
+        
+        log OK "MSSQL Tools zainstalowane"
+        log INFO "PATH zaktualizowany: $mssql_path"
+        log WARN "Wyloguj się i zaloguj ponownie, aby PATH zadziałał"
+    fi
+    
+    return 0
+}
+
 # Instalacja Docker Compose
 install_docker_compose() {
     echo ""
@@ -654,6 +768,18 @@ verify_installation() {
         ((warnings++))
     fi
     
+    # MSSQL Tools (sqlcmd)
+    if command -v sqlcmd &>/dev/null; then
+        log OK "sqlcmd: zainstalowany"
+    elif [ -f /opt/mssql-tools18/bin/sqlcmd ]; then
+        log OK "sqlcmd: /opt/mssql-tools18/bin/sqlcmd"
+    elif [ -f /opt/mssql-tools/bin/sqlcmd ]; then
+        log OK "sqlcmd: /opt/mssql-tools/bin/sqlcmd"
+    else
+        log WARN "sqlcmd: nie znaleziono (opcjonalne dla testów MSSQL)"
+        ((warnings++))
+    fi
+    
     # Podsumowanie
     echo ""
     if [ "$all_ok" = true ] && [ "$warnings" -eq 0 ]; then
@@ -710,6 +836,9 @@ main() {
     if ! install_docker_compose; then
         log WARN "Instalacja Docker Compose nie powiodła się (można kontynuować)"
     fi
+    
+    # Instalacja MSSQL Tools
+    install_mssql_tools || log WARN "Instalacja MSSQL Tools nie powiodła się (opcjonalne)"
     
     # Konfiguracja użytkownika
     configure_user
