@@ -137,11 +137,12 @@ app.get('/api/health/detailed', async (_req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Helpers
-const DB_HOST = process.env.MSSQL_WAPROMAG_HOST || 'mssql-wapromag';
-const DB_PORT = parseInt(process.env.MSSQL_WAPROMAG_PORT || '1433', 10);
-const DB_USER = process.env.MSSQL_WAPROMAG_USER || 'sa';
-const DB_PASS = process.env.MSSQL_WAPROMAG_PASSWORD || 'WapromagPass123!';
+// Database configuration from environment
+const DB_HOST = process.env.MSSQL_HOST || process.env.MSSQL_WAPROMAG_HOST || 'mssql-wapromag';
+const DB_PORT = parseInt(process.env.MSSQL_PORT || process.env.MSSQL_WAPROMAG_PORT || '1433', 10);
+const DB_USER = process.env.MSSQL_USER || process.env.MSSQL_WAPROMAG_USER || 'sa';
+const DB_PASS = process.env.MSSQL_PASSWORD || process.env.MSSQL_WAPROMAG_PASSWORD || 'WapromagPass123!';
+const DB_NAME = process.env.MSSQL_DATABASE || 'WAPROMAG_TEST';
 
 function dbConfig(databaseName) {
   return {
@@ -165,8 +166,8 @@ function dbConfig(databaseName) {
 
 function mapDbAlias(alias) {
   // Map GUI alias to actual DB name
-  if ((alias || '').toLowerCase() === 'wapromag') return 'WAPROMAG_TEST';
-  return alias || 'WAPROMAG_TEST';
+  if ((alias || '').toLowerCase() === 'wapromag') return DB_NAME;
+  return alias || DB_NAME;
 }
 
 // Database test endpoint used by GUI
@@ -255,9 +256,20 @@ function sendToPrinter(host, port, data, timeoutMs = 3000) {
   });
 }
 
+// Printer configuration from environment
 const PRINTERS = {
-  'zebra-1': { host: 'zebra-printer-1', port: 9100, printer: 'ZEBRA-001' },
-  'zebra-2': { host: 'zebra-printer-2', port: 9100, printer: 'ZEBRA-002' },
+  'zebra-1': { 
+    host: process.env.ZEBRA_1_HOST || 'zebra-printer-1', 
+    port: parseInt(process.env.ZEBRA_1_PORT || '9100', 10), 
+    printer: process.env.ZEBRA_1_NAME || 'ZEBRA-001',
+    model: process.env.ZEBRA_1_MODEL || 'ZT230'
+  },
+  'zebra-2': { 
+    host: process.env.ZEBRA_2_HOST || 'zebra-printer-2', 
+    port: parseInt(process.env.ZEBRA_2_PORT || '9100', 10), 
+    printer: process.env.ZEBRA_2_NAME || 'ZEBRA-002',
+    model: process.env.ZEBRA_2_MODEL || 'ZT410'
+  },
 };
 
 // Printers status for GUI

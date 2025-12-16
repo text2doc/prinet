@@ -1,38 +1,67 @@
+# =============================================================================
+# WAPRO Network Mock - Docker Compose Configuration
+# =============================================================================
+# All settings are loaded from .env file
+# Set *_ENABLED=false in .env to disable a service and use external one
+# =============================================================================
+
 services:
-  # SQL Server dla WAPROMAG
+  # ---------------------------------------------------------------------------
+  # MSSQL WAPROMAG DATABASE
+  # ---------------------------------------------------------------------------
   mssql-wapromag:
     image: mcr.microsoft.com/mssql/server:2019-latest
-    container_name: wapromag-mssql
+    container_name: ${MSSQL_CONTAINER_NAME:-wapromag-mssql}
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=WapromagPass123!
+      - SA_PASSWORD=${MSSQL_SA_PASSWORD:-WapromagPass123!}
       - MSSQL_PID=Express
     ports:
-      - "1433:1433"
+      - "${MSSQL_EXTERNAL_PORT:-1433}:1433"
     volumes:
       - mssql_wapromag_data:/var/opt/mssql
       - ./mssql-wapromag/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - wapro-network
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P WapromagPass123! -Q 'SELECT 1' -C || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P WapromagPass123! -Q 'SELECT 1'"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD:-WapromagPass123!} -Q 'SELECT 1' -C || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD:-WapromagPass123!} -Q 'SELECT 1'"]
       interval: 30s
       timeout: 10s
       retries: 3
+    profiles:
+      - mssql
+      - full
 
-  # Raspberry Pi Mock Server
+  # ---------------------------------------------------------------------------
+  # RPI SERVER (Main Application)
+  # ---------------------------------------------------------------------------
   rpi-server:
     build: ./rpi-server
-    container_name: rpi-mock-server
+    container_name: ${RPI_CONTAINER_NAME:-rpi-mock-server}
     ports:
-      - "8082:8080"  # GUI Web Interface
-      - "8081:8081"  # REST API
+      - "${RPI_GUI_EXTERNAL_PORT:-8082}:${RPI_GUI_INTERNAL_PORT:-8080}"
+      - "${RPI_API_EXTERNAL_PORT:-8081}:${RPI_API_INTERNAL_PORT:-8081}"
     environment:
-      - NODE_ENV=development
-      - MSSQL_WAPROMAG_HOST=mssql-wapromag
-      - MSSQL_WAPROMAG_PORT=1433
-      - MSSQL_WAPROMAG_USER=sa
-      - MSSQL_WAPROMAG_PASSWORD=WapromagPass123!
+      - NODE_ENV=${NODE_ENV:-development}
+      # Database connection (can point to Docker or external)
+      - MSSQL_HOST=${MSSQL_HOST:-mssql-wapromag}
+      - MSSQL_PORT=${MSSQL_PORT:-1433}
+      - MSSQL_USER=${MSSQL_USER:-sa}
+      - MSSQL_PASSWORD=${MSSQL_PASSWORD:-WapromagPass123!}
+      - MSSQL_DATABASE=${MSSQL_DATABASE:-WAPROMAG_TEST}
+      # Printer 1 connection (can point to Docker or external)
+      - ZEBRA_1_HOST=${ZEBRA_1_HOST:-zebra-printer-1}
+      - ZEBRA_1_PORT=${ZEBRA_1_SOCKET_PORT:-9100}
+      - ZEBRA_1_NAME=${ZEBRA_1_NAME:-ZEBRA-001}
+      - ZEBRA_1_MODEL=${ZEBRA_1_MODEL:-ZT230}
+      # Printer 2 connection (can point to Docker or external)
+      - ZEBRA_2_HOST=${ZEBRA_2_HOST:-zebra-printer-2}
+      - ZEBRA_2_PORT=${ZEBRA_2_SOCKET_PORT:-9100}
+      - ZEBRA_2_NAME=${ZEBRA_2_NAME:-ZEBRA-002}
+      - ZEBRA_2_MODEL=${ZEBRA_2_MODEL:-ZT410}
+      # Internal ports
+      - RPI_GUI_PORT=${RPI_GUI_INTERNAL_PORT:-8080}
+      - RPI_API_PORT=${RPI_API_INTERNAL_PORT:-8081}
     volumes:
       - ./rpi-server:/app
       - /app/node_modules
@@ -40,28 +69,31 @@ services:
     user: "0:0"
     networks:
       - wapro-network
-    depends_on:
-      - mssql-wapromag
     command: ["/bin/sh", "-c", "if [ ! -f node_modules/socket.io/package.json ]; then echo 'Installing dependencies (runtime as root)...' && mkdir -p node_modules && npm install --production --no-audit --no-fund; fi; node server.js"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8080/health || curl -fs http://localhost:8081/health"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:${RPI_GUI_INTERNAL_PORT:-8080}/health || curl -fs http://localhost:${RPI_API_INTERNAL_PORT:-8081}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    profiles:
+      - rpi
+      - full
 
-  # ZEBRA Printer Mock 1
+  # ---------------------------------------------------------------------------
+  # ZEBRA PRINTER 1 (Mock)
+  # ---------------------------------------------------------------------------
   zebra-printer-1:
     build: ./zebra-printer-1
-    container_name: zebra-printer-1
+    container_name: ${ZEBRA_1_CONTAINER_NAME:-zebra-printer-1}
     ports:
-      - "9100:9100"  # Standard ZEBRA port
-      - "8091:8080"  # Web interface
+      - "${ZEBRA_1_EXTERNAL_SOCKET_PORT:-9100}:9100"
+      - "${ZEBRA_1_EXTERNAL_WEB_PORT:-8091}:${ZEBRA_1_INTERNAL_WEB_PORT:-8080}"
     environment:
-      - PRINTER_NAME=ZEBRA-001
-      - PRINTER_MODEL=ZT230
-      - PRINTER_IP=zebra-printer-1
+      - PRINTER_NAME=${ZEBRA_1_NAME:-ZEBRA-001}
+      - PRINTER_MODEL=${ZEBRA_1_MODEL:-ZT230}
+      - PRINTER_IP=${ZEBRA_1_HOST:-zebra-printer-1}
       - PRINTER_SOCKET_PORT=9100
-      - FLASK_RUN_PORT=8080
+      - FLASK_RUN_PORT=${ZEBRA_1_INTERNAL_WEB_PORT:-8080}
     networks:
       - wapro-network
     healthcheck:
@@ -69,20 +101,26 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    profiles:
+      - zebra1
+      - zebra
+      - full
 
-  # ZEBRA Printer Mock 2
+  # ---------------------------------------------------------------------------
+  # ZEBRA PRINTER 2 (Mock)
+  # ---------------------------------------------------------------------------
   zebra-printer-2:
     build: ./zebra-printer-2
-    container_name: zebra-printer-2
+    container_name: ${ZEBRA_2_CONTAINER_NAME:-zebra-printer-2}
     ports:
-      - "9101:9100"
-      - "8092:8080"
+      - "${ZEBRA_2_EXTERNAL_SOCKET_PORT:-9101}:9100"
+      - "${ZEBRA_2_EXTERNAL_WEB_PORT:-8092}:${ZEBRA_2_INTERNAL_WEB_PORT:-8080}"
     environment:
-      - PRINTER_NAME=ZEBRA-002
-      - PRINTER_MODEL=ZT410
-      - PRINTER_IP=zebra-printer-2
+      - PRINTER_NAME=${ZEBRA_2_NAME:-ZEBRA-002}
+      - PRINTER_MODEL=${ZEBRA_2_MODEL:-ZT410}
+      - PRINTER_IP=${ZEBRA_2_HOST:-zebra-printer-2}
       - PRINTER_SOCKET_PORT=9100
-      - FLASK_RUN_PORT=8080
+      - FLASK_RUN_PORT=${ZEBRA_2_INTERNAL_WEB_PORT:-8080}
     networks:
       - wapro-network
     healthcheck:
@@ -90,32 +128,41 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    profiles:
+      - zebra2
+      - zebra
+      - full
 
-  # Test Runner Service
+  # ---------------------------------------------------------------------------
+  # TEST RUNNER
+  # ---------------------------------------------------------------------------
   test-runner:
     build: ./test-runner
-    container_name: test-runner
+    container_name: ${TEST_RUNNER_CONTAINER_NAME:-test-runner}
     environment:
-      - TEST_ENVIRONMENT=docker
+      - TEST_ENVIRONMENT=${TEST_ENVIRONMENT:-docker}
+      - MSSQL_HOST=${MSSQL_HOST:-mssql-wapromag}
+      - MSSQL_PORT=${MSSQL_PORT:-1433}
+      - ZEBRA_1_HOST=${ZEBRA_1_HOST:-zebra-printer-1}
+      - ZEBRA_1_PORT=${ZEBRA_1_SOCKET_PORT:-9100}
+      - ZEBRA_2_HOST=${ZEBRA_2_HOST:-zebra-printer-2}
+      - ZEBRA_2_PORT=${ZEBRA_2_SOCKET_PORT:-9100}
     volumes:
       - ./tests:/tests
       - ./reports:/reports
     networks:
       - wapro-network
-    depends_on:
-      - rpi-server
-      - zebra-printer-1
-      - zebra-printer-2
-      - mssql-wapromag
     profiles:
       - testing
 
-  # Prometheus Metrics Server
+  # ---------------------------------------------------------------------------
+  # PROMETHEUS (Monitoring)
+  # ---------------------------------------------------------------------------
   prometheus:
     image: prom/prometheus:latest
-    container_name: wapro-prometheus
+    container_name: ${PROMETHEUS_CONTAINER_NAME:-wapro-prometheus}
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
@@ -131,15 +178,17 @@ services:
     profiles:
       - monitoring
 
-  # Grafana Dashboard
+  # ---------------------------------------------------------------------------
+  # GRAFANA (Monitoring Dashboard)
+  # ---------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:latest
-    container_name: wapro-grafana
+    container_name: ${GRAFANA_CONTAINER_NAME:-wapro-grafana}
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -153,13 +202,19 @@ services:
     profiles:
       - monitoring
 
+# =============================================================================
+# NETWORKS
+# =============================================================================
 networks:
   wapro-network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.28.0.0/16
+        - subnet: ${NETWORK_SUBNET:-172.28.0.0/16}
 
+# =============================================================================
+# VOLUMES
+# =============================================================================
 volumes:
   mssql_wapromag_data:
   grafana_data:

@@ -1,4 +1,240 @@
 // rpi-server/public/js/app.js
+
+// Sample ZPL Labels for quick insertion
+const SAMPLE_LABELS = {
+    simple: `^XA
+^FO50,50^A0N,50,50^FDHello World^FS
+^FO50,120^A0N,30,30^FDTest Label^FS
+^XZ`,
+    barcode: `^XA
+^FO50,50^A0N,30,30^FDProduct Code:^FS
+^FO50,90^BY3^BCN,100,Y,N,N^FD5901234123457^FS
+^XZ`,
+    qrcode: `^XA
+^FO50,50^A0N,30,30^FDScan QR Code:^FS
+^FO50,100^BQN,2,5^FDQA,https://example.com^FS
+^XZ`,
+    product: `^XA
+^FO50,30^A0N,40,40^FDProduct Name^FS
+^FO50,80^A0N,25,25^FDSKU: PRD-001234^FS
+^FO50,115^A0N,20,20^FDPrice: 29.99 PLN^FS
+^FO50,150^BY2^BCN,80,Y,N,N^FD1234567890123^FS
+^FO50,260^A0N,18,18^FDMade in Poland^FS
+^XZ`,
+    box: `^XA
+^FO50,50^GB300,200,3^FS
+^FO70,70^A0N,35,35^FDWARNING^FS
+^FO70,120^A0N,20,20^FDFragile Content^FS
+^FO70,150^A0N,20,20^FDHandle with Care^FS
+^XZ`,
+    line: `^XA
+^FO50,50^GB300,0,3^FS
+^FO50,100^A0N,30,30^FDSection A^FS
+^FO50,140^GB300,0,3^FS
+^FO50,160^A0N,30,30^FDSection B^FS
+^FO50,200^GB300,0,3^FS
+^XZ`,
+    multifield: `^XA
+^FO50,30^A0N,25,25^FDFrom:^FS
+^FO120,30^A0N,25,25^FDWarehouse A^FS
+^FO50,60^A0N,25,25^FDTo:^FS
+^FO120,60^A0N,25,25^FDCustomer XYZ^FS
+^FO50,100^GB300,0,2^FS
+^FO50,120^A0N,20,20^FDDate: 2025-01-15^FS
+^FO50,150^A0N,20,20^FDWeight: 2.5 kg^FS
+^FO50,180^BY2^BCN,60,Y,N,N^FDSHIP001234^FS
+^XZ`,
+    warehouse: `^XA
+^FO30,20^GB340,280,2^FS
+^FO50,40^A0N,45,45^FDLOCATION^FS
+^FO50,100^A0N,80,80^FDA-12-03^FS
+^FO50,190^GB280,0,2^FS
+^FO50,210^A0N,25,25^FDZone: PICKING^FS
+^FO50,245^A0N,20,20^FDCapacity: 500 units^FS
+^XZ`
+};
+
+// ZPL Parser for label emulation
+class ZPLParser {
+    constructor() {
+        this.scale = 0.5; // Scale factor for display
+        this.elements = [];
+        this.labelWidth = 400;
+        this.labelHeight = 300;
+    }
+
+    parse(zpl) {
+        this.elements = [];
+        const commands = this.extractCommands(zpl);
+        let currentX = 0;
+        let currentY = 0;
+        let fontSize = 30;
+        
+        for (const cmd of commands) {
+            if (cmd.startsWith('^FO')) {
+                // Field Origin
+                const match = cmd.match(/\^FO(\d+),(\d+)/);
+                if (match) {
+                    currentX = parseInt(match[1]) * this.scale;
+                    currentY = parseInt(match[2]) * this.scale;
+                }
+            } else if (cmd.startsWith('^A0')) {
+                // Font selection
+                const match = cmd.match(/\^A0[A-Z],(\d+),(\d+)/);
+                if (match) {
+                    fontSize = parseInt(match[1]) * this.scale;
+                }
+            } else if (cmd.startsWith('^FD')) {
+                // Field Data
+                const match = cmd.match(/\^FD(.+?)(?:\^FS|$)/);
+                if (match) {
+                    this.elements.push({
+                        type: 'text',
+                        x: currentX,
+                        y: currentY,
+                        text: match[1],
+                        fontSize: fontSize
+                    });
+                }
+            } else if (cmd.startsWith('^BC')) {
+                // Barcode Code 128
+                const heightMatch = cmd.match(/\^BC[A-Z],(\d+)/);
+                const height = heightMatch ? parseInt(heightMatch[1]) * this.scale : 50;
+                this.elements.push({
+                    type: 'barcode',
+                    x: currentX,
+                    y: currentY,
+                    height: height,
+                    subtype: 'code128'
+                });
+            } else if (cmd.startsWith('^BQ')) {
+                // QR Code
+                const sizeMatch = cmd.match(/\^BQ[A-Z],(\d+),(\d+)/);
+                const size = sizeMatch ? parseInt(sizeMatch[2]) * 10 * this.scale : 50;
+                this.elements.push({
+                    type: 'qrcode',
+                    x: currentX,
+                    y: currentY,
+                    size: size
+                });
+            } else if (cmd.startsWith('^GB')) {
+                // Graphic Box
+                const match = cmd.match(/\^GB(\d+),(\d+),(\d+)/);
+                if (match) {
+                    const width = parseInt(match[1]) * this.scale;
+                    const height = parseInt(match[2]) * this.scale;
+                    const thickness = parseInt(match[3]) * this.scale;
+                    
+                    if (height === 0 || height < 3) {
+                        // Horizontal line
+                        this.elements.push({
+                            type: 'line',
+                            x: currentX,
+                            y: currentY,
+                            width: width,
+                            height: Math.max(thickness, 1),
+                            orientation: 'horizontal'
+                        });
+                    } else if (width === 0 || width < 3) {
+                        // Vertical line
+                        this.elements.push({
+                            type: 'line',
+                            x: currentX,
+                            y: currentY,
+                            width: Math.max(thickness, 1),
+                            height: height,
+                            orientation: 'vertical'
+                        });
+                    } else {
+                        // Box
+                        this.elements.push({
+                            type: 'box',
+                            x: currentX,
+                            y: currentY,
+                            width: width,
+                            height: height,
+                            thickness: thickness
+                        });
+                    }
+                }
+            }
+        }
+        
+        return this.elements;
+    }
+
+    extractCommands(zpl) {
+        const commands = [];
+        const regex = /(\^[A-Z0-9]+[^^\~]*|~[A-Z]+[^^\~]*)/gi;
+        let match;
+        while ((match = regex.exec(zpl)) !== null) {
+            commands.push(match[1].trim());
+        }
+        return commands;
+    }
+
+    renderToHTML() {
+        if (this.elements.length === 0) {
+            return '<div class="empty-label">No printable content detected</div>';
+        }
+
+        let maxX = 200, maxY = 150;
+        this.elements.forEach(el => {
+            const elRight = el.x + (el.width || el.size || 100);
+            const elBottom = el.y + (el.height || el.fontSize || 30);
+            if (elRight > maxX) maxX = elRight;
+            if (elBottom > maxY) maxY = elBottom;
+        });
+
+        let html = `<div class="label-preview" style="width:${maxX + 40}px;height:${maxY + 40}px;position:relative;">`;
+        
+        for (const el of this.elements) {
+            switch (el.type) {
+                case 'text':
+                    html += `<div class="label-element label-text" style="left:${el.x}px;top:${el.y}px;font-size:${el.fontSize}px;">${this.escapeHtml(el.text)}</div>`;
+                    break;
+                case 'barcode':
+                    html += `<div class="label-element" style="left:${el.x}px;top:${el.y}px;">
+                        <div class="label-barcode" style="height:${el.height}px;">|||||||||||||||</div>
+                        <div class="label-barcode-text">${this.lastBarcodeData || '1234567890'}</div>
+                    </div>`;
+                    break;
+                case 'qrcode':
+                    html += `<div class="label-element label-qr" style="left:${el.x}px;top:${el.y}px;">
+                        <div class="label-qr-placeholder" style="width:${el.size}px;height:${el.size}px;"></div>
+                    </div>`;
+                    break;
+                case 'box':
+                    html += `<div class="label-element label-box" style="left:${el.x}px;top:${el.y}px;width:${el.width}px;height:${el.height}px;border-width:${el.thickness}px;"></div>`;
+                    break;
+                case 'line':
+                    html += `<div class="label-element label-line" style="left:${el.x}px;top:${el.y}px;width:${el.width}px;height:${el.height}px;"></div>`;
+                    break;
+            }
+        }
+        
+        html += '</div>';
+        return html;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    getInfo() {
+        const types = {};
+        this.elements.forEach(el => {
+            types[el.type] = (types[el.type] || 0) + 1;
+        });
+        return {
+            elementCount: this.elements.length,
+            types: types
+        };
+    }
+}
+
 class WaproConsole {
     constructor() {
         this.socket = io({
@@ -417,17 +653,136 @@ class WaproConsole {
     }
 
     sendPrinterCommand(printerId) {
-        // Convert printerId format: zebra-1 -> zebra1, zebra-2 -> zebra2
-        const elemId = printerId.replace('-', '');
-        const commandSection = document.getElementById(`${elemId}Commands`);
-        if (commandSection) {
-            if (commandSection.style.display === 'none') {
-                commandSection.style.display = 'block';
-            } else {
-                commandSection.style.display = 'none';
+        // Open modal instead of inline command section
+        this.openCommandModal(printerId);
+    }
+
+    // Modal functions
+    openCommandModal(printerId) {
+        this.currentModalPrinter = printerId;
+        const modal = document.getElementById('zplCommandModal');
+        const printerName = document.getElementById('modalPrinterName');
+        const input = document.getElementById('modalCommandInput');
+        
+        // Get printer name from config
+        const printerNames = {
+            'zebra-1': 'ZEBRA-001',
+            'zebra-2': 'ZEBRA-002'
+        };
+        
+        printerName.textContent = printerNames[printerId] || printerId.toUpperCase();
+        input.value = '';
+        this.clearModalPreview();
+        
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeCommandModal() {
+        const modal = document.getElementById('zplCommandModal');
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+        this.currentModalPrinter = null;
+    }
+
+    selectCommand(command) {
+        const input = document.getElementById('modalCommandInput');
+        input.value = command;
+        this.previewModalCommand();
+    }
+
+    previewModalCommand() {
+        const input = document.getElementById('modalCommandInput');
+        const canvas = document.getElementById('modalLabelCanvas');
+        const info = document.getElementById('modalEmulatorInfo');
+        const zpl = input.value.trim();
+
+        if (!zpl) {
+            canvas.innerHTML = '<div class="empty-label">Enter or select a ZPL command to preview</div>';
+            info.innerHTML = '';
+            return;
+        }
+
+        // Check if it's a label command (starts with ^XA)
+        if (!zpl.includes('^XA')) {
+            canvas.innerHTML = `<div class="empty-label">
+                <div style="text-align:center;">
+                    <i class="fas fa-terminal" style="font-size:2rem;margin-bottom:10px;display:block;color:var(--primary-color);"></i>
+                    <strong>Command: ${this.escapeHtml(zpl)}</strong><br>
+                    <small style="color:var(--text-secondary);">This is a status/config command, not a label.</small>
+                </div>
+            </div>`;
+            info.innerHTML = `<div class="info-row"><span>Type:</span><span>Status/Config Command</span></div>`;
+            return;
+        }
+
+        // Parse ZPL and render preview
+        const parser = new ZPLParser();
+        parser.parse(zpl);
+        const html = parser.renderToHTML();
+        const parseInfo = parser.getInfo();
+
+        canvas.innerHTML = html;
+        
+        let infoHtml = `<div class="info-row"><span>Elements:</span><span>${parseInfo.elementCount}</span></div>`;
+        if (Object.keys(parseInfo.types).length > 0) {
+            infoHtml += '<div class="parsed-commands">';
+            for (const [type, count] of Object.entries(parseInfo.types)) {
+                infoHtml += `<code>${type}: ${count}</code> `;
             }
-        } else {
-            console.warn(`Command section not found: ${elemId}Commands`);
+            infoHtml += '</div>';
+        }
+        info.innerHTML = infoHtml;
+    }
+
+    clearModalPreview() {
+        const canvas = document.getElementById('modalLabelCanvas');
+        const info = document.getElementById('modalEmulatorInfo');
+        if (canvas) {
+            canvas.innerHTML = '<div class="empty-label">Select a command to preview</div>';
+        }
+        if (info) {
+            info.innerHTML = '';
+        }
+    }
+
+    async sendModalCommand() {
+        const input = document.getElementById('modalCommandInput');
+        const command = input.value.trim();
+        const printerId = this.currentModalPrinter;
+
+        if (!command) {
+            this.showToast('Please enter or select a command', 'warning');
+            return;
+        }
+
+        if (!printerId) {
+            this.showToast('No printer selected', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/zebra/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ printerId, command })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast(`Command sent to ${printerId.toUpperCase()}`, 'success');
+                this.addLogEntry({
+                    level: 'info',
+                    message: `Sent to ${printerId}: ${command.substring(0, 50)}${command.length > 50 ? '...' : ''}`,
+                    timestamp: new Date().toISOString()
+                });
+                this.closeCommandModal();
+            } else {
+                this.showToast('Command failed: ' + (result.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            this.showToast('Command execution failed', 'error');
         }
     }
 
@@ -483,7 +838,88 @@ class WaproConsole {
 
         if (activeTextarea) {
             activeTextarea.value = command;
+            // Auto-preview if emulator is visible
+            const commandSection = activeTextarea.closest('.command-section');
+            if (commandSection) {
+                const printerId = commandSection.id.replace('Commands', '').replace('zebra', 'zebra-');
+                this.previewLabel(printerId);
+            }
         }
+    }
+
+    previewLabel(printerId) {
+        const elemId = printerId.replace('-', '');
+        const commandSection = document.getElementById(`${elemId}Commands`);
+        const canvas = document.getElementById(`${elemId}Canvas`);
+        const info = document.getElementById(`${elemId}EmulatorInfo`);
+        
+        if (!commandSection || !canvas) {
+            this.showToast('Emulator not found', 'error');
+            return;
+        }
+
+        const textarea = commandSection.querySelector('textarea');
+        const zpl = textarea.value.trim();
+
+        if (!zpl) {
+            canvas.innerHTML = '<div class="empty-label">Enter ZPL command to preview</div>';
+            info.innerHTML = '';
+            return;
+        }
+
+        // Check if it's a label command (starts with ^XA)
+        if (!zpl.includes('^XA')) {
+            // It's a status/config command, show info instead
+            canvas.innerHTML = `<div class="empty-label">
+                <div style="text-align:center;">
+                    <i class="fas fa-terminal" style="font-size:2rem;margin-bottom:10px;display:block;"></i>
+                    <strong>Command: ${this.escapeHtml(zpl)}</strong><br>
+                    <small>This is a status/config command, not a label.</small>
+                </div>
+            </div>`;
+            info.innerHTML = `<div class="info-row"><span>Type:</span><span>Status/Config Command</span></div>`;
+            return;
+        }
+
+        // Parse ZPL and render preview
+        const parser = new ZPLParser();
+        parser.parse(zpl);
+        const html = parser.renderToHTML();
+        const parseInfo = parser.getInfo();
+
+        canvas.innerHTML = html;
+        
+        // Show info about parsed elements
+        let infoHtml = `<div class="info-row"><span>Elements:</span><span>${parseInfo.elementCount}</span></div>`;
+        if (Object.keys(parseInfo.types).length > 0) {
+            infoHtml += '<div class="parsed-commands">';
+            for (const [type, count] of Object.entries(parseInfo.types)) {
+                infoHtml += `<code>${type}: ${count}</code> `;
+            }
+            infoHtml += '</div>';
+        }
+        info.innerHTML = infoHtml;
+
+        this.showToast('Label preview generated', 'info');
+    }
+
+    clearEmulator(printerId) {
+        const elemId = printerId.replace('-', '');
+        const canvas = document.getElementById(`${elemId}Canvas`);
+        const info = document.getElementById(`${elemId}EmulatorInfo`);
+        
+        if (canvas) {
+            canvas.innerHTML = '<div class="empty-label">Send a ZPL command to see preview</div>';
+        }
+        if (info) {
+            info.innerHTML = '';
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     updatePrinterStatus(printerId, isOnline) {
@@ -716,6 +1152,14 @@ window.printTestLabel = (id) => app.printTestLabel(id);
 window.sendPrinterCommand = (id) => app.sendPrinterCommand(id);
 window.executePrinterCommand = (id) => app.executePrinterCommand(id);
 window.insertCommand = (cmd) => app.insertCommand(cmd);
+window.previewLabel = (id) => app.previewLabel(id);
+window.clearEmulator = (id) => app.clearEmulator(id);
+window.openCommandModal = (id) => app.openCommandModal(id);
+window.closeCommandModal = () => app.closeCommandModal();
+window.selectCommand = (cmd) => app.selectCommand(cmd);
+window.previewModalCommand = () => app.previewModalCommand();
+window.clearModalPreview = () => app.clearModalPreview();
+window.sendModalCommand = () => app.sendModalCommand();
 window.runFullDiagnostics = () => app.runFullDiagnostics();
 window.refreshLogs = () => app.refreshLogs();
 window.clearLogs = () => app.clearLogs();

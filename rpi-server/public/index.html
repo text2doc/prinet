@@ -232,47 +232,6 @@
                 </div>
             </div>
 
-            <div class="section">
-                <h3>Common ZPL Commands</h3>
-                <div class="commands-grid">
-                    <div class="commands-category">
-                        <h4><i class="fas fa-info-circle"></i> Status & Info</h4>
-                        <div class="commands-list">
-                            <button class="cmd-btn" onclick="insertCommand('~HI')">~HI (Host ID)</button>
-                            <button class="cmd-btn" onclick="insertCommand('~HS')">~HS (Host Status)</button>
-                            <button class="cmd-btn" onclick="insertCommand('~HD')">~HD (Head Diagnostic)</button>
-                            <button class="cmd-btn" onclick="insertCommand('PING')">PING</button>
-                        </div>
-                    </div>
-                    <div class="commands-category">
-                        <h4><i class="fas fa-cog"></i> Configuration</h4>
-                        <div class="commands-list">
-                            <button class="cmd-btn" onclick="insertCommand('^WD')">^WD (Config Dump)</button>
-                            <button class="cmd-btn" onclick="insertCommand('~JC')">~JC (Set Clock)</button>
-                            <button class="cmd-btn" onclick="insertCommand('^JUS')">^JUS (Save Settings)</button>
-                            <button class="cmd-btn" onclick="insertCommand('~JR')">~JR (Power On Reset)</button>
-                        </div>
-                    </div>
-                    <div class="commands-category">
-                        <h4><i class="fas fa-tag"></i> Sample Labels</h4>
-                        <div class="commands-list">
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.simple)">Simple Text</button>
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.barcode)">Barcode EAN-13</button>
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.qrcode)">QR Code</button>
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.product)">Product Label</button>
-                        </div>
-                    </div>
-                    <div class="commands-category">
-                        <h4><i class="fas fa-shapes"></i> Graphics</h4>
-                        <div class="commands-list">
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.box)">Box/Frame</button>
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.line)">Lines</button>
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.multifield)">Multi-field</button>
-                            <button class="cmd-btn" onclick="insertCommand(SAMPLE_LABELS.warehouse)">Warehouse Label</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Diagnostics Tab -->
@@ -323,6 +282,91 @@
 
     <!-- Toast notifications -->
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ZPL Command Modal -->
+    <div class="modal-overlay" id="zplCommandModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-terminal"></i> Send ZPL Command to <span id="modalPrinterName">ZEBRA</span></h3>
+                <button class="modal-close" onclick="closeCommandModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-layout">
+                    <div class="modal-left">
+                        <div class="commands-grid">
+                            <div class="commands-category">
+                                <h4><i class="fas fa-info-circle"></i> Status & Info</h4>
+                                <div class="commands-list">
+                                    <button class="cmd-btn" onclick="selectCommand('~HI')">~HI (Host ID)</button>
+                                    <button class="cmd-btn" onclick="selectCommand('~HS')">~HS (Host Status)</button>
+                                    <button class="cmd-btn" onclick="selectCommand('~HD')">~HD (Head Diagnostic)</button>
+                                    <button class="cmd-btn" onclick="selectCommand('PING')">PING</button>
+                                </div>
+                            </div>
+                            <div class="commands-category">
+                                <h4><i class="fas fa-cog"></i> Configuration</h4>
+                                <div class="commands-list">
+                                    <button class="cmd-btn" onclick="selectCommand('^WD')">^WD (Config Dump)</button>
+                                    <button class="cmd-btn" onclick="selectCommand('~JC')">~JC (Set Clock)</button>
+                                    <button class="cmd-btn" onclick="selectCommand('^JUS')">^JUS (Save Settings)</button>
+                                    <button class="cmd-btn" onclick="selectCommand('~JR')">~JR (Power On Reset)</button>
+                                </div>
+                            </div>
+                            <div class="commands-category">
+                                <h4><i class="fas fa-tag"></i> Sample Labels</h4>
+                                <div class="commands-list">
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.simple)">Simple Text</button>
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.barcode)">Barcode EAN-13</button>
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.qrcode)">QR Code</button>
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.product)">Product Label</button>
+                                </div>
+                            </div>
+                            <div class="commands-category">
+                                <h4><i class="fas fa-shapes"></i> Graphics</h4>
+                                <div class="commands-list">
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.box)">Box/Frame</button>
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.line)">Lines</button>
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.multifield)">Multi-field</button>
+                                    <button class="cmd-btn" onclick="selectCommand(SAMPLE_LABELS.warehouse)">Warehouse Label</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-right">
+                        <div class="command-input-section">
+                            <label>ZPL Command:</label>
+                            <textarea id="modalCommandInput" placeholder="Enter or select ZPL command..." rows="6"></textarea>
+                        </div>
+                        <div class="label-emulator modal-emulator">
+                            <div class="emulator-header">
+                                <span><i class="fas fa-eye"></i> Preview</span>
+                                <button class="btn btn-sm btn-secondary" onclick="clearModalPreview()">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                            </div>
+                            <div class="label-canvas" id="modalLabelCanvas">
+                                <div class="empty-label">Select a command to preview</div>
+                            </div>
+                            <div class="emulator-info" id="modalEmulatorInfo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCommandModal()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button class="btn" onclick="previewModalCommand()">
+                    <i class="fas fa-eye"></i> Preview
+                </button>
+                <button class="btn btn-success" onclick="sendModalCommand()">
+                    <i class="fas fa-paper-plane"></i> Send Command
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Socket.IO -->
     <script src="/socket.io/socket.io.js"></script>
