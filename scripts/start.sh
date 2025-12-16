@@ -88,11 +88,16 @@ preflight
 
 # Uruchomienie wszystkich serwisów
 echo "[*] Uruchamianie kontenerow..."
-$USE_SUDO docker-compose up -d
+
+# Uzyj profilu full jesli nie ustawiono innego
+COMPOSE_PROFILES="${COMPOSE_PROFILES:-full}"
+export COMPOSE_PROFILES
+
+$USE_SUDO docker-compose --profile full up -d
 
 # Sprawdzenie statusu
 echo "[i] Status serwisow:"
-$USE_SUDO docker-compose ps
+$USE_SUDO docker-compose --profile full ps
 
 echo ""
 echo "[.] Oczekiwanie na uruchomienie serwisów..."

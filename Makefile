@@ -93,7 +93,7 @@ rebuild: ## Przebudowuje wszystkie obrazy (bez cache)
 
 status: ## Pokazuje status wszystkich serwisow
 	@echo "$(BLUE)[i] Status serwisow:$(RESET)"
-	@docker-compose ps 2>/dev/null || sudo docker-compose ps
+	@docker-compose --profile full ps 2>/dev/null || sudo docker-compose --profile full ps
 	@echo ""
 	@echo "$(BLUE)[i] Dostepne interfejsy (porty z .env):$(RESET)"
 	@echo "  RPI Server GUI:      $(GREEN)http://localhost:$${RPI_GUI_EXTERNAL_PORT:-8082}$(RESET)"

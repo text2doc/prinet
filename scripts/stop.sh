@@ -10,9 +10,9 @@ echo "[X] Zatrzymywanie WAPRO Network Mock..."
 
 # Sprawdz czy docker wymaga sudo
 if docker info &>/dev/null 2>&1; then
-    docker-compose down
+    docker-compose --profile full down
 elif sudo docker info &>/dev/null 2>&1; then
-    sudo docker-compose down
+    sudo docker-compose --profile full down
 else
     echo "[!] Docker nie dziala"
     exit 1
