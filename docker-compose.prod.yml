@@ -1,0 +1,65 @@
+# =============================================================================
+# WAPRO Network Mock - Production Docker Compose Configuration
+# =============================================================================
+# This file contains ONLY the RPI Server for production use.
+# External services (MSSQL, Zebra printers) are configured via .env
+# =============================================================================
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+# Or:    make prod
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # RPI SERVER (Main Application) - PRODUCTION
+  # ---------------------------------------------------------------------------
+  rpi-server:
+    build: ./rpi-server
+    container_name: ${RPI_CONTAINER_NAME:-rpi-server-prod}
+    restart: unless-stopped
+    ports:
+      - "${RPI_GUI_EXTERNAL_PORT:-8082}:${RPI_GUI_INTERNAL_PORT:-8080}"
+      - "${RPI_API_EXTERNAL_PORT:-8081}:${RPI_API_INTERNAL_PORT:-8081}"
+    environment:
+      - NODE_ENV=production
+      # Database connection - EXTERNAL MSSQL SERVER
+      - MSSQL_HOST=${MSSQL_HOST}
+      - MSSQL_PORT=${MSSQL_PORT:-1433}
+      - MSSQL_USER=${MSSQL_USER:-sa}
+      - MSSQL_PASSWORD=${MSSQL_PASSWORD}
+      - MSSQL_DATABASE=${MSSQL_DATABASE:-WAPROMAG}
+      # Printer 1 connection - EXTERNAL ZEBRA PRINTER
+      - ZEBRA_1_HOST=${ZEBRA_1_HOST}
+      - ZEBRA_1_PORT=${ZEBRA_1_SOCKET_PORT:-9100}
+      - ZEBRA_1_NAME=${ZEBRA_1_NAME:-ZEBRA-001}
+      - ZEBRA_1_MODEL=${ZEBRA_1_MODEL:-ZT230}
+      # Printer 2 connection - EXTERNAL ZEBRA PRINTER
+      - ZEBRA_2_HOST=${ZEBRA_2_HOST}
+      - ZEBRA_2_PORT=${ZEBRA_2_SOCKET_PORT:-9100}
+      - ZEBRA_2_NAME=${ZEBRA_2_NAME:-ZEBRA-002}
+      - ZEBRA_2_MODEL=${ZEBRA_2_MODEL:-ZT410}
+      # Internal ports
+      - RPI_GUI_PORT=${RPI_GUI_INTERNAL_PORT:-8080}
+      - RPI_API_PORT=${RPI_API_INTERNAL_PORT:-8081}
+    volumes:
+      - ./rpi-server:/app
+      - /app/node_modules
+    networks:
+      - wapro-network
+    command: ["/bin/sh", "-c", "if [ ! -f node_modules/socket.io/package.json ]; then echo 'Installing dependencies...' && mkdir -p node_modules && npm install --production --no-audit --no-fund; fi; node server.js"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:${RPI_GUI_INTERNAL_PORT:-8080}/health || curl -fs http://localhost:${RPI_API_INTERNAL_PORT:-8081}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  wapro-network:
+    driver: bridge

@@ -42,6 +42,40 @@ stop: ## Zatrzymuje wszystkie serwisy
 
 restart: stop start ## Restartuje wszystkie serwisy
 
+# =============================================================================
+# PRODUCTION (tylko RPI Server, zewnetrzne MSSQL i Zebra)
+# =============================================================================
+
+prod: ## Uruchamia tryb produkcyjny (tylko RPI Server)
+	@echo "$(GREEN)[*] Uruchamianie trybu PRODUKCYJNEGO...$(RESET)"
+	@echo "$(YELLOW)[!] Uzywa zewnetrznych: MSSQL, Zebra printers$(RESET)"
+	@docker-compose -f docker-compose.prod.yml up -d
+	@echo ""
+	@echo "$(GREEN)[+] RPI Server uruchomiony$(RESET)"
+	@docker-compose -f docker-compose.prod.yml ps
+
+prod-stop: ## Zatrzymuje tryb produkcyjny
+	@echo "$(RED)[X] Zatrzymywanie trybu produkcyjnego...$(RESET)"
+	@docker-compose -f docker-compose.prod.yml down
+
+prod-logs: ## Logi trybu produkcyjnego
+	@docker-compose -f docker-compose.prod.yml logs -f
+
+prod-restart: prod-stop prod ## Restartuje tryb produkcyjny
+
+prod-status: ## Status trybu produkcyjnego
+	@echo "$(BLUE)[i] Status produkcyjny:$(RESET)"
+	@docker-compose -f docker-compose.prod.yml ps
+	@echo ""
+	@echo "$(BLUE)[i] Konfiguracja zewnetrzna:$(RESET)"
+	@echo "  MSSQL:   $${MSSQL_HOST:-nie ustawiono}:$${MSSQL_PORT:-1433}"
+	@echo "  Zebra 1: $${ZEBRA_1_HOST:-nie ustawiono}:$${ZEBRA_1_SOCKET_PORT:-9100}"
+	@echo "  Zebra 2: $${ZEBRA_2_HOST:-nie ustawiono}:$${ZEBRA_2_SOCKET_PORT:-9100}"
+
+prod-build: ## Buduje obraz produkcyjny
+	@echo "$(YELLOW)[B] Budowanie obrazu produkcyjnego...$(RESET)"
+	@docker-compose -f docker-compose.prod.yml build
+
 clean: ## Czyści środowisko (usuwa kontenery, obrazy, wolumeny)
 	@echo "$(RED)[-] Czyszczenie środowiska...$(RESET)"
 	@docker-compose down -v --remove-orphans
@@ -133,6 +167,15 @@ monitor: ## Otwiera monitoring w przegladarce
 webenv: ## Uruchamia webowy edytor pliku .env (port 8888)
 	@echo "$(BLUE)[i] Uruchamianie edytora .env...$(RESET)"
 	@python3 scripts/webenv.py 8888
+
+discover: ## Wykrywa urzadzenia sieciowe (drukarki Zebra, MSSQL)
+	@python3 scripts/discover.py -q
+
+discover-full: ## Pelne skanowanie sieci
+	@python3 scripts/discover.py
+
+cli: ## Uruchamia interaktywny CLI DSL
+	@python3 scripts/wapro-cli.py
 
 dev: ## Tryb deweloperski (rebuild + start + logs)
 	@make rebuild
