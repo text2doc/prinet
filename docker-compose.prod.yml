@@ -45,7 +45,7 @@ services:
       - /app/node_modules
     networks:
       wapro-network:
-        ipv4_address: 192.168.8.100
+        ipv4_address: 192.168.9.100
     command: ["/bin/sh", "-c", "if [ ! -f node_modules/socket.io/package.json ]; then echo 'Installing dependencies...' && mkdir -p node_modules && npm install --production --no-audit --no-fund; fi; node server.js"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:${RPI_GUI_INTERNAL_PORT:-8080}/health || curl -fs http://localhost:${RPI_API_INTERNAL_PORT:-8081}/health"]
@@ -66,4 +66,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: ${NETWORK_SUBNET:-172.28.0.0/16}
+        - subnet: 192.168.9.0/24

@@ -497,13 +497,51 @@ install_mssql_tools() {
     
     log STEP "Instalacja mssql-tools i unixodbc-dev..."
     # ACCEPT_EULA=Y jest wymagane dla mssql-tools
-    ACCEPT_EULA=Y apt-get install -y -qq mssql-tools18 unixodbc-dev >> "$LOG_FILE" 2>&1 || {
-        log WARN "mssql-tools18 niedostępne, próbuję mssql-tools..."
-        ACCEPT_EULA=Y apt-get install -y -qq mssql-tools unixodbc-dev >> "$LOG_FILE" 2>&1 || {
-            log ERROR "Nie udało się zainstalować MSSQL Tools"
+    
+    # Najpierw zainstaluj unixodbc-dev
+    apt-get install -y -qq unixodbc-dev >> "$LOG_FILE" 2>&1 || true
+    
+    # Próba instalacji mssql-tools18 (nowsza wersja)
+    if ACCEPT_EULA=Y apt-get install -y mssql-tools18 >> "$LOG_FILE" 2>&1; then
+        log OK "mssql-tools18 zainstalowane"
+    # Próba instalacji mssql-tools (starsza wersja)
+    elif ACCEPT_EULA=Y apt-get install -y mssql-tools >> "$LOG_FILE" 2>&1; then
+        log OK "mssql-tools zainstalowane"
+    else
+        # Debian 12 może wymagać libssl1.1 - próba instalacji z Ubuntu repo
+        log WARN "Standardowa instalacja nie powiodła się"
+        log STEP "Próba instalacji libssl1.1 (wymagane dla mssql-tools)..."
+        
+        # Sprawdź architekturę
+        local arch=$(dpkg --print-architecture)
+        local libssl_url=""
+        case "$arch" in
+            amd64) libssl_url="http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb" ;;
+            arm64) libssl_url="http://ports.ubuntu.com/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_arm64.deb" ;;
+            armhf) libssl_url="http://ports.ubuntu.com/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_armhf.deb" ;;
+        esac
+        
+        if [ -n "$libssl_url" ]; then
+            curl -fsSL "$libssl_url" -o /tmp/libssl1.1.deb >> "$LOG_FILE" 2>&1 && \
+            dpkg -i /tmp/libssl1.1.deb >> "$LOG_FILE" 2>&1 && \
+            rm -f /tmp/libssl1.1.deb
+            
+            # Ponowna próba instalacji
+            if ACCEPT_EULA=Y apt-get install -y mssql-tools18 >> "$LOG_FILE" 2>&1; then
+                log OK "mssql-tools18 zainstalowane (z libssl1.1)"
+            elif ACCEPT_EULA=Y apt-get install -y mssql-tools >> "$LOG_FILE" 2>&1; then
+                log OK "mssql-tools zainstalowane (z libssl1.1)"
+            else
+                log WARN "Nie udało się zainstalować MSSQL Tools"
+                log INFO "Możesz użyć Docker do testowania MSSQL: docker exec -it wapromag-mssql /opt/mssql-tools/bin/sqlcmd ..."
+                return 1
+            fi
+        else
+            log WARN "Nieobsługiwana architektura dla libssl1.1: $arch"
+            log INFO "Możesz użyć Docker do testowania MSSQL: docker exec -it wapromag-mssql /opt/mssql-tools/bin/sqlcmd ..."
             return 1
-        }
-    }
+        fi
+    fi
     
     # Dodanie do PATH
     log STEP "Konfiguracja PATH..."

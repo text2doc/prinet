@@ -49,14 +49,17 @@ restart: stop start ## Restartuje wszystkie serwisy
 prod: ## Uruchamia tryb produkcyjny (tylko RPI Server)
 	@echo "$(GREEN)[*] Uruchamianie trybu PRODUKCYJNEGO...$(RESET)"
 	@echo "$(YELLOW)[!] Uzywa zewnetrznych: MSSQL, Zebra printers$(RESET)"
-	@docker-compose -f docker-compose.prod.yml up -d
+	@docker-compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+	@docker network rm prinet_wapro-network 2>/dev/null || true
+	@docker-compose -f docker-compose.prod.yml up -d --build
 	@echo ""
 	@echo "$(GREEN)[+] RPI Server uruchomiony$(RESET)"
 	@docker-compose -f docker-compose.prod.yml ps
 
 prod-stop: ## Zatrzymuje tryb produkcyjny
 	@echo "$(RED)[X] Zatrzymywanie trybu produkcyjnego...$(RESET)"
-	@docker-compose -f docker-compose.prod.yml down
+	@docker-compose -f docker-compose.prod.yml down --remove-orphans
+	@docker network rm prinet_wapro-network 2>/dev/null || true
 
 prod-logs: ## Logi trybu produkcyjnego
 	@docker-compose -f docker-compose.prod.yml logs -f

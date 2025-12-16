@@ -23,7 +23,7 @@ services:
       - ./mssql-wapromag/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       wapro-network:
-        ipv4_address: 192.168.8.20
+        ipv4_address: 192.168.9.20
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD:-WapromagPass123!} -Q 'SELECT 1' -C || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD:-WapromagPass123!} -Q 'SELECT 1'"]
       interval: 30s
@@ -70,7 +70,7 @@ services:
     user: "0:0"
     networks:
       wapro-network:
-        ipv4_address: 192.168.8.100
+        ipv4_address: 192.168.9.100
     command: ["/bin/sh", "-c", "if [ ! -f node_modules/socket.io/package.json ]; then echo 'Installing dependencies (runtime as root)...' && mkdir -p node_modules && npm install --production --no-audit --no-fund; fi; node server.js"]
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:${RPI_GUI_INTERNAL_PORT:-8080}/health || curl -fs http://localhost:${RPI_API_INTERNAL_PORT:-8081}/health"]
@@ -98,7 +98,7 @@ services:
       - FLASK_RUN_PORT=${ZEBRA_1_INTERNAL_WEB_PORT:-8080}
     networks:
       wapro-network:
-        ipv4_address: 192.168.8.165
+        ipv4_address: 192.168.9.31
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "9100"]
       interval: 15s
@@ -126,7 +126,7 @@ services:
       - FLASK_RUN_PORT=${ZEBRA_2_INTERNAL_WEB_PORT:-8080}
     networks:
       wapro-network:
-        ipv4_address: 192.168.8.166
+        ipv4_address: 192.168.9.32
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "9100"]
       interval: 15s
@@ -156,7 +156,7 @@ services:
       - ./reports:/reports
     networks:
       wapro-network:
-        ipv4_address: 192.168.8.200
+        ipv4_address: 192.168.9.50
     profiles:
       - testing
 
