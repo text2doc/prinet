@@ -429,7 +429,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         (function() {
             const exampleContent = document.getElementById('exampleViewer').value;
             const config = {};
-            exampleContent.split('\n').forEach(line => {
+            exampleContent.split('\\n').forEach(line => {
                 line = line.trim();
                 if (line && !line.startsWith('#')) {
                     const eqIndex = line.indexOf('=');
@@ -756,23 +756,47 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         // CONFIG TABLE FUNCTIONS (Universal/Dynamic)
         // ============================================
         
-        // Prefix grouping configuration - auto-detects keys by prefix
-        const prefixGroups = {
+        // Base prefix grouping configuration
+        const basePrefixGroups = {
             'COMPOSE_': { label: 'Docker Compose', order: 1 },
             'NETWORK_': { label: 'Siec', order: 2 },
             'MSSQL_': { label: 'Baza danych MSSQL', order: 3 },
             'RPI_': { label: 'Serwer RPI', order: 4 },
-            'ZEBRA_1_': { label: 'Drukarka Zebra 1', order: 5 },
-            'ZEBRA_2_': { label: 'Drukarka Zebra 2', order: 6 },
-            'ZEBRA_': { label: 'Drukarki Zebra', order: 7 },
-            'GRAFANA_': { label: 'Grafana', order: 8 },
-            'PROMETHEUS_': { label: 'Prometheus', order: 9 },
-            'TEST_': { label: 'Testy', order: 10 },
-            'NODE_': { label: 'Node.js', order: 11 },
-            'DEBUG': { label: 'Debug', order: 12 },
-            'LOG_': { label: 'Logowanie', order: 13 },
-            'GENERATE_': { label: 'Generowanie', order: 14 }
+            'GRAFANA_': { label: 'Grafana', order: 50 },
+            'PROMETHEUS_': { label: 'Prometheus', order: 51 },
+            'TEST_': { label: 'Testy', order: 60 },
+            'NODE_': { label: 'Node.js', order: 61 },
+            'DEBUG': { label: 'Debug', order: 62 },
+            'LOG_': { label: 'Logowanie', order: 63 },
+            'GENERATE_': { label: 'Generowanie', order: 64 }
         };
+        
+        // Dynamic prefix groups - will be populated from keys
+        let prefixGroups = {};
+        
+        function buildDynamicPrefixGroups(keys) {
+            // Start with base groups
+            prefixGroups = { ...basePrefixGroups };
+            
+            // Find all ZEBRA_N_ patterns dynamically
+            const zebraPattern = /^ZEBRA_(\\d+)_/;
+            const zebraNumbers = new Set();
+            
+            keys.forEach(key => {
+                const match = key.match(zebraPattern);
+                if (match) {
+                    zebraNumbers.add(parseInt(match[1]));
+                }
+            });
+            
+            // Add dynamic ZEBRA groups sorted by number
+            Array.from(zebraNumbers).sort((a, b) => a - b).forEach((num, idx) => {
+                prefixGroups['ZEBRA_' + num + '_'] = { 
+                    label: 'Drukarka Zebra ' + num, 
+                    order: 10 + idx 
+                };
+            });
+        }
         
         function parseEnvContent(content) {
             const config = {};
@@ -828,6 +852,10 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             const content = document.getElementById('envEditor').value;
             currentConfig = parseEnvContent(content);
             const keys = currentConfig._keyOrder || Object.keys(currentConfig).filter(k => k !== '_keyOrder');
+            
+            // Build dynamic prefix groups based on actual keys (e.g., ZEBRA_1_, ZEBRA_2_, etc.)
+            buildDynamicPrefixGroups(keys);
+            
             const groups = groupKeysByPrefix(keys);
             
             let html = '';
