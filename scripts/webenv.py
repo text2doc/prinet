@@ -316,7 +316,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                     <textarea id="envEditor" placeholder="Ladowanie...">{{env_content}}</textarea>
                     <div class="actions">
                         <button class="btn btn-primary" onclick="saveEnv()">Zapisz .env</button>
-                        <button class="btn btn-secondary" onclick="reloadEnv()">Odswierz</button>
+                        <button class="btn btn-secondary" onclick="reloadEnv()">Odśwież</button>
                         <button class="btn btn-danger" onclick="resetEnv()">Reset do .env.example</button>
                     </div>
                     <div id="status" class="status"></div>

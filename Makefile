@@ -1,5 +1,5 @@
 # Makefile
-.PHONY: help install setup start stop restart clean test test-e2e logs build rebuild status
+.PHONY: help install setup start stop restart clean test test-e2e logs build rebuild status webenv_start webenv_stop
 
 # Kolory dla output
 GREEN := \033[32m
@@ -219,11 +219,26 @@ monitor: ## Otwiera monitoring w przegladarce
 	@echo "$(GREEN)[i] Otwieranie monitoringu...$(RESET)"
 	@xdg-open http://localhost:3000 2>/dev/null || open http://localhost:3000 2>/dev/null || echo "Otworz http://localhost:3000"
 
-webenv: ## Uruchamia webowy edytor pliku .env (port 8888)
+webenv: ## Uruchamia webowy edytor pliku .env (port 8888) - blokujacy
 	@echo "$(BLUE)[i] Uruchamianie edytora .env...$(RESET)"
 	@fuser -k 8888/tcp 2>/dev/null || true
 	@sleep 1
 	@python3 scripts/webenv.py 8888
+
+webenv_start: ## Uruchamia webenv w tle (port 8888)
+	@echo "$(GREEN)[+] Uruchamianie WebEnv w tle...$(RESET)"
+	@fuser -k 8888/tcp 2>/dev/null || true
+	@sleep 1
+	@nohup python3 scripts/webenv.py 8888 > logs/webenv.log 2>&1 &
+	@sleep 1
+	@echo "$(GREEN)[+] WebEnv uruchomiony: http://localhost:8888$(RESET)"
+	@echo "$(BLUE)[i] Logi: logs/webenv.log$(RESET)"
+
+webenv_stop: ## Zatrzymuje webenv
+	@echo "$(RED)[X] Zatrzymywanie WebEnv...$(RESET)"
+	-@fuser -k 8888/tcp 2>/dev/null
+	-@pkill -f "python.*webenv.py" 2>/dev/null
+	@echo "$(GREEN)[+] WebEnv zatrzymany$(RESET)"
 
 discover: ## Wykrywa urzadzenia sieciowe (drukarki Zebra, MSSQL)
 	@python3 scripts/discover.py -q

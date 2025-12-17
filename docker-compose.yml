@@ -130,6 +130,11 @@ services:
     networks:
       wapro-network:
         ipv4_address: 192.168.9.50
+    healthcheck:
+      test: ["CMD", "python3", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     profiles:
       - testing
 

@@ -459,6 +459,76 @@ else
 fi
 
 # ============================================================================
+# TEST 6: Dynamiczne grupowanie zmiennych
+# ============================================================================
+echo ""
+echo "🔄 Testowanie dynamicznego grupowania:"
+TOTAL_TESTS=$((TOTAL_TESTS + 2))
+
+# Test czy HTML zawiera funkcję buildDynamicPrefixGroups
+if test_html_contains 'buildDynamicPrefixGroups' "funkcja dynamicznego grupowania"; then
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+
+# Test czy HTML zawiera prefixGroups
+if test_html_contains 'prefixGroups' "konfiguracja prefixów"; then
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+
+# ============================================================================
+# TEST 7: Porównanie z .env.example
+# ============================================================================
+echo ""
+echo "📋 Testowanie porównania z .env.example:"
+TOTAL_TESTS=$((TOTAL_TESTS + 2))
+
+# Test czy HTML zawiera defaultConfig
+if test_html_contains 'defaultConfig' "zmienna defaultConfig"; then
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+
+# Test czy tabela ma kolumnę domyślną
+if test_html_contains 'Domyslna (.env.example)' "kolumna domyślna w tabeli"; then
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+
+# ============================================================================
+# TEST 8: Walidacja struktury .env
+# ============================================================================
+echo ""
+echo "📝 Testowanie struktury .env:"
+TOTAL_TESTS=$((TOTAL_TESTS + 2))
+
+# Test czy .env zawiera wymagane sekcje
+echo -n "   Testuję obecność COMPOSE_PROJECT_NAME... "
+env_content=$(curl -s --max-time 5 "$WEBENV_URL/load" 2>/dev/null | jq -r '.content' 2>/dev/null)
+if echo "$env_content" | grep -q "COMPOSE_PROJECT_NAME"; then
+    echoc "${GREEN}✓${NC}"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    echoc "${RED}✗${NC}"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+
+# Test czy .env zawiera konfigurację MSSQL
+echo -n "   Testuję obecność MSSQL_HOST... "
+if echo "$env_content" | grep -q "MSSQL_HOST"; then
+    echoc "${GREEN}✓${NC}"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    echoc "${RED}✗${NC}"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+fi
+
+# ============================================================================
 # PODSUMOWANIE TESTÓW
 # ============================================================================
 echo ""

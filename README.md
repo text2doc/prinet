@@ -23,8 +23,11 @@ curl -I http://localhost:3000
 - [API Dokumentacja](docs/API.md) - Opis dostępnych endpointów API
 - [Schemat bazy danych](docs/SQL_Schema.md) - Struktura bazy danych WAPROMAG
 - [Testowanie](docs/Testing.md) - Instrukcje dotyczące testowania
+- [Testy E2E](docs/E2E_Testing.md) - Dokumentacja testów end-to-end
+- [WebEnv Editor](docs/WebEnv.md) - Edytor konfiguracji .env
 - [Komendy ZEBRA](docs/ZEBRA_Commands.md) - Obsługiwane komendy drukarek
 - [Rozwiązywanie problemów](docs/Troubleshooting.md) - Typowe problemy i ich rozwiązania
+- [Propozycje refaktoryzacji](docs/Refactoring.md) - Plan ulepszeń kodu
 
 Kompletne środowisko testowe do symulacji sieci WAPRO z bazą danych MSSQL, serwerem RPI i drukarkami ZEBRA.
 
@@ -53,6 +56,9 @@ make status
 # Uruchomienie testów E2E
 make test-e2e
 
+# Uruchomienie testów WebEnv
+make test-webenv
+
 # Uruchomienie wszystkich testów
 make test
 
@@ -80,19 +86,23 @@ wapro-network-mock/
 
 | Usługa | Port | Opis |
 |--------|------|------|
-| RPI Server GUI | 8080 | Interfejs użytkownika |
+| RPI Server GUI | 8082 | Interfejs użytkownika |
 | RPI Server API | 8081 | API REST |
 | ZEBRA Printer 1 | 8091 | Interfejs drukarki 1 |
 | ZEBRA Printer 2 | 8092 | Interfejs drukarki 2 |
+| ZEBRA Printer 3-6 | 8093-8096 | Interfejsy drukarek 3-6 |
+| WebEnv Editor | 8888 | Edytor konfiguracji .env |
 | Grafana | 3000 | Panel monitoringu |
 | MSSQL Server | 1433 | Baza danych WAPROMAG |
 
 ## 🌐 Dostępne interfejsy
 
-- **RPI Server GUI**: http://localhost:8080
+- **RPI Server GUI**: http://localhost:8082
 - **RPI Server API**: http://localhost:8081
 - **ZEBRA Printer 1**: http://localhost:8091
 - **ZEBRA Printer 2**: http://localhost:8092
+- **ZEBRA Printer 3-6**: http://localhost:8093-8096
+- **WebEnv Editor**: http://localhost:8888 (edytor .env)
 - **Monitoring**: http://localhost:3000
 - **MSSQL WAPROMAG**: localhost:1433
 
@@ -200,6 +210,11 @@ make logs-sql
 ```bash
 # Restart systemu
 make restart
+
+# WebEnv - edytor konfiguracji .env
+make webenv_start    # Uruchom w tle
+make webenv_stop     # Zatrzymaj
+make webenv          # Uruchom (blokujący)
 
 # Czyszczenie środowiska
 make clean
