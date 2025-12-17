@@ -8,8 +8,11 @@ Default port: 8888
 import os
 import sys
 import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import parse_qs
+import threading
+import subprocess
+from datetime import datetime
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from urllib.parse import parse_qs, urlparse
 
 # Configuration
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +20,99 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 ENV_FILE = os.path.join(PROJECT_DIR, '.env')
 ENV_EXAMPLE = os.path.join(PROJECT_DIR, '.env.example')
 DEFAULT_PORT = 8888
+
+ADMIN_TOKEN = os.getenv('WEBENV_ADMIN_TOKEN', '')
+ALLOWED_MAKE_TARGETS = [
+    'start',
+    'stop',
+    'restart',
+    'status',
+    'discover',
+    'discover-full',
+    'health',
+    'prod',
+    'prod-stop',
+    'prod-status',
+    'prod-build',
+]
+MAKE_LOG_FILE = os.path.join(PROJECT_DIR, 'logs', 'webenv_make.log')
+MAKE_STATE_LOCK = threading.Lock()
+MAKE_STATE = {
+    'running': False,
+    'target': None,
+    'pid': None,
+    'exit_code': None,
+    'started_at': None,
+    'ended_at': None,
+}
+MAKE_PROCESS = None
+
+
+def _append_make_log(text: str) -> None:
+    os.makedirs(os.path.dirname(MAKE_LOG_FILE), exist_ok=True)
+    with open(MAKE_LOG_FILE, 'a', encoding='utf-8', errors='replace') as f:
+        f.write(text)
+
+
+def _read_make_log_tail(max_bytes: int = 20000) -> str:
+    try:
+        with open(MAKE_LOG_FILE, 'rb') as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes))
+            data = f.read()
+        return data.decode('utf-8', errors='replace')
+    except FileNotFoundError:
+        return ''
+    except Exception as e:
+        return f'[webenv] Error reading log: {e}'
+
+
+def _run_make_target_in_background(target: str) -> None:
+    global MAKE_PROCESS
+
+    started_at = datetime.now().isoformat(timespec='seconds')
+    _append_make_log(f"\n===== {started_at} | make {target} =====\n")
+
+    try:
+        proc = subprocess.Popen(
+            ['make', target],
+            cwd=PROJECT_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+
+        with MAKE_STATE_LOCK:
+            MAKE_PROCESS = proc
+            MAKE_STATE['pid'] = proc.pid
+
+        if proc.stdout:
+            for line in proc.stdout:
+                _append_make_log(line)
+
+        exit_code = proc.wait()
+
+        ended_at = datetime.now().isoformat(timespec='seconds')
+        _append_make_log(f"\n===== {ended_at} | exit={exit_code} =====\n")
+
+        with MAKE_STATE_LOCK:
+            MAKE_STATE['running'] = False
+            MAKE_STATE['exit_code'] = exit_code
+            MAKE_STATE['ended_at'] = ended_at
+            MAKE_STATE['pid'] = None
+            MAKE_PROCESS = None
+
+    except Exception as e:
+        ended_at = datetime.now().isoformat(timespec='seconds')
+        _append_make_log(f"\n===== {ended_at} | ERROR: {e} =====\n")
+        with MAKE_STATE_LOCK:
+            MAKE_STATE['running'] = False
+            MAKE_STATE['exit_code'] = 1
+            MAKE_STATE['ended_at'] = ended_at
+            MAKE_STATE['pid'] = None
+            MAKE_PROCESS = None
 
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="pl">
@@ -267,15 +363,41 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                             <tr style="background: #2d2d3d;">
                                 <th style="padding: 10px; text-align: left; border-bottom: 1px solid #3d3d4d;">Parametr</th>
                                 <th style="padding: 10px; text-align: left; border-bottom: 1px solid #3d3d4d;">Aktualna wartosc</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #3d3d4d;">Domyslna (.env.example)</th>
                                 <th style="padding: 10px; text-align: left; border-bottom: 1px solid #3d3d4d;">Propozycja ze skanu</th>
                                 <th style="padding: 10px; text-align: center; border-bottom: 1px solid #3d3d4d;">Akcja</th>
                             </tr>
                         </thead>
                         <tbody id="configTableBody">
-                            <tr><td colspan="4" style="padding: 20px; text-align: center; opacity: 0.6;">Ladowanie konfiguracji...</td></tr>
+                            <tr><td colspan="5" style="padding: 20px; text-align: center; opacity: 0.6;">Ladowanie konfiguracji...</td></tr>
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top: 20px;">
+            <div class="panel-header">
+                <h2>Admin: make <span class="badge" id="makeStatus">idle</span></h2>
+                <div>
+                    <button class="btn btn-secondary" onclick="refreshMakePanel()">Odswiez</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="actions" style="margin-top: 0;">
+                    <button class="btn btn-primary" onclick="runMake('start')">make start</button>
+                    <button class="btn btn-secondary" onclick="runMake('stop')">make stop</button>
+                    <button class="btn btn-secondary" onclick="runMake('restart')">make restart</button>
+                    <button class="btn btn-secondary" onclick="runMake('status')">make status</button>
+                    <button class="btn btn-primary" onclick="runMake('discover')">make discover</button>
+                    <button class="btn btn-secondary" onclick="runMake('discover-full')">make discover-full</button>
+                    <button class="btn btn-secondary" onclick="runMake('health')">make health</button>
+                </div>
+                <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="password" id="adminToken" placeholder="Admin token (opcjonalnie)" style="flex: 1; min-width: 260px; padding: 8px; background: #0d0d1a; border: 1px solid #3d3d4d; border-radius: 4px; color: #e4e4e4;">
+                    <button class="btn btn-secondary" onclick="saveAdminToken()">Zapisz token</button>
+                </div>
+                <textarea id="makeLog" readonly style="height: 220px; margin-top: 10px; opacity: 0.9;"></textarea>
             </div>
         </div>
         
@@ -299,8 +421,104 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     <script>
         // Global variables
         let currentConfig = {};
+        let defaultConfig = {};
         let suggestions = {};
         let discoveredData = null;
+        
+        // Parse .env.example content for defaults
+        (function() {
+            const exampleContent = document.getElementById('exampleViewer').value;
+            const config = {};
+            exampleContent.split('\n').forEach(line => {
+                line = line.trim();
+                if (line && !line.startsWith('#')) {
+                    const eqIndex = line.indexOf('=');
+                    if (eqIndex > 0) {
+                        const key = line.substring(0, eqIndex).trim();
+                        const value = line.substring(eqIndex + 1).trim();
+                        config[key] = value;
+                    }
+                }
+            });
+            defaultConfig = config;
+        })();
+
+        function getAdminToken() {
+            return localStorage.getItem('webenv_admin_token') || '';
+        }
+
+        function saveAdminToken() {
+            const input = document.getElementById('adminToken');
+            const token = (input && input.value) ? input.value.trim() : '';
+            if (token) {
+                localStorage.setItem('webenv_admin_token', token);
+                showStatus('Zapisano token admina', 'success');
+            } else {
+                localStorage.removeItem('webenv_admin_token');
+                showStatus('Usunieto token admina', 'success');
+            }
+            refreshMakePanel();
+        }
+
+        async function fetchMakeStatus() {
+            const token = getAdminToken();
+            const headers = token ? { 'X-Admin-Token': token } : {};
+            const response = await fetch('/admin/status', { headers });
+            return await response.json();
+        }
+
+        async function fetchMakeLogs() {
+            const token = getAdminToken();
+            const headers = token ? { 'X-Admin-Token': token } : {};
+            const response = await fetch('/admin/logs', { headers });
+            return await response.json();
+        }
+
+        async function refreshMakePanel() {
+            try {
+                const statusResult = await fetchMakeStatus();
+                const badge = document.getElementById('makeStatus');
+                if (badge && statusResult && statusResult.success) {
+                    const st = statusResult.state;
+                    let label = st.running ? 'running' : 'idle';
+                    if (st.target) label += ' (' + st.target + ')';
+                    badge.textContent = label;
+                }
+
+                const logsResult = await fetchMakeLogs();
+                const logEl = document.getElementById('makeLog');
+                if (logEl && logsResult && logsResult.success) {
+                    logEl.value = logsResult.log || '';
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+            } catch (e) {
+                console.error('[webenv] Make panel error:', e);
+            }
+        }
+
+        async function runMake(target) {
+            const token = getAdminToken();
+            const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+            if (token) headers['X-Admin-Token'] = token;
+
+            try {
+                const response = await fetch('/admin/run', {
+                    method: 'POST',
+                    headers,
+                    body: 'target=' + encodeURIComponent(target)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showStatus('Uruchomiono: make ' + target, 'success');
+                } else {
+                    showStatus('Blad: ' + (result.error || 'unknown'), 'error');
+                }
+            } catch (e) {
+                showStatus('Blad: ' + e.message, 'error');
+            }
+
+            refreshMakePanel();
+        }
         
         function showStatus(message, type) {
             const status = document.getElementById('status');
@@ -436,7 +654,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
 
         function displayDevices(data) {
-            discoveredData = { devices: data };
+            discoveredData = data;
             let html = '';
             let total = 0;
             
@@ -535,30 +753,31 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
         
         // ============================================
-        // CONFIG TABLE FUNCTIONS
+        // CONFIG TABLE FUNCTIONS (Universal/Dynamic)
         // ============================================
         
-        // Key parameters to show in form
-        const configKeys = [
-            { key: 'MSSQL_HOST', label: 'MSSQL Host', type: 'mssql' },
-            { key: 'MSSQL_EXTERNAL_PORT', label: 'MSSQL Port', type: 'mssql' },
-            { key: 'MSSQL_USER', label: 'MSSQL User', type: 'mssql' },
-            { key: 'MSSQL_SA_PASSWORD', label: 'MSSQL Password', type: 'mssql' },
-            { key: 'MSSQL_DATABASE', label: 'MSSQL Database', type: 'mssql' },
-            { key: 'ZEBRA_1_HOST', label: 'Zebra 1 Host', type: 'zebra' },
-            { key: 'ZEBRA_1_SOCKET_PORT', label: 'Zebra 1 Port', type: 'zebra' },
-            { key: 'ZEBRA_1_NAME', label: 'Zebra 1 Name', type: 'zebra' },
-            { key: 'ZEBRA_2_HOST', label: 'Zebra 2 Host', type: 'zebra' },
-            { key: 'ZEBRA_2_SOCKET_PORT', label: 'Zebra 2 Port', type: 'zebra' },
-            { key: 'ZEBRA_2_NAME', label: 'Zebra 2 Name', type: 'zebra' },
-            { key: 'RPI_GUI_EXTERNAL_PORT', label: 'RPI GUI Port', type: 'rpi' },
-            { key: 'RPI_API_EXTERNAL_PORT', label: 'RPI API Port', type: 'rpi' },
-            { key: 'GRAFANA_PORT', label: 'Grafana Port', type: 'monitoring' }
-        ];
+        // Prefix grouping configuration - auto-detects keys by prefix
+        const prefixGroups = {
+            'COMPOSE_': { label: 'Docker Compose', order: 1 },
+            'NETWORK_': { label: 'Siec', order: 2 },
+            'MSSQL_': { label: 'Baza danych MSSQL', order: 3 },
+            'RPI_': { label: 'Serwer RPI', order: 4 },
+            'ZEBRA_1_': { label: 'Drukarka Zebra 1', order: 5 },
+            'ZEBRA_2_': { label: 'Drukarka Zebra 2', order: 6 },
+            'ZEBRA_': { label: 'Drukarki Zebra', order: 7 },
+            'GRAFANA_': { label: 'Grafana', order: 8 },
+            'PROMETHEUS_': { label: 'Prometheus', order: 9 },
+            'TEST_': { label: 'Testy', order: 10 },
+            'NODE_': { label: 'Node.js', order: 11 },
+            'DEBUG': { label: 'Debug', order: 12 },
+            'LOG_': { label: 'Logowanie', order: 13 },
+            'GENERATE_': { label: 'Generowanie', order: 14 }
+        };
         
         function parseEnvContent(content) {
             const config = {};
-            content.split('\n').forEach(line => {
+            const keyOrder = [];
+            content.split('\\n').forEach(line => {
                 line = line.trim();
                 if (line && !line.startsWith('#')) {
                     const eqIndex = line.indexOf('=');
@@ -566,53 +785,96 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                         const key = line.substring(0, eqIndex).trim();
                         const value = line.substring(eqIndex + 1).trim();
                         config[key] = value;
+                        keyOrder.push(key);
                     }
                 }
             });
+            config._keyOrder = keyOrder;
             return config;
+        }
+        
+        function getKeyGroup(key) {
+            // Check prefixes in order of specificity (longer first)
+            const sortedPrefixes = Object.keys(prefixGroups).sort((a, b) => b.length - a.length);
+            for (const prefix of sortedPrefixes) {
+                if (key.startsWith(prefix) || key === prefix.replace('_', '')) {
+                    return { prefix, ...prefixGroups[prefix] };
+                }
+            }
+            return { prefix: '_OTHER_', label: 'Inne', order: 999 };
+        }
+        
+        function groupKeysByPrefix(keys) {
+            const groups = {};
+            keys.forEach(key => {
+                const group = getKeyGroup(key);
+                if (!groups[group.prefix]) {
+                    groups[group.prefix] = { label: group.label, order: group.order, keys: [] };
+                }
+                groups[group.prefix].keys.push(key);
+            });
+            // Sort groups by order
+            return Object.entries(groups)
+                .sort((a, b) => a[1].order - b[1].order)
+                .map(([prefix, data]) => ({ prefix, ...data }));
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
         
         function buildConfigTable() {
             const content = document.getElementById('envEditor').value;
             currentConfig = parseEnvContent(content);
+            const keys = currentConfig._keyOrder || Object.keys(currentConfig).filter(k => k !== '_keyOrder');
+            const groups = groupKeysByPrefix(keys);
             
             let html = '';
-            let currentType = '';
             
-            configKeys.forEach(item => {
+            groups.forEach(group => {
                 // Section header
-                if (item.type !== currentType) {
-                    currentType = item.type;
-                    const typeLabels = {
-                        'mssql': 'Baza danych MSSQL',
-                        'zebra': 'Drukarki Zebra',
-                        'rpi': 'Serwer RPI',
-                        'monitoring': 'Monitoring'
-                    };
-                    html += '<tr style="background: #1a1a2e;"><td colspan="4" style="padding: 10px; font-weight: bold; color: #667eea;">' + (typeLabels[currentType] || currentType) + '</td></tr>';
-                }
+                html += '<tr style="background: #1a1a2e;"><td colspan="5" style="padding: 10px; font-weight: bold; color: #667eea;">' + escapeHtml(group.label) + ' <small style="opacity: 0.5;">(' + group.keys.length + ')</small></td></tr>';
                 
-                const currentValue = currentConfig[item.key] || '';
-                const suggestion = suggestions[item.key] || '';
-                const hasSuggestion = suggestion && suggestion !== currentValue;
-                
-                html += '<tr style="border-bottom: 1px solid #2d2d3d;">';
-                html += '<td style="padding: 8px;"><code style="background: #0d0d1a; padding: 2px 6px; border-radius: 3px;">' + item.key + '</code><br><small style="opacity: 0.6;">' + item.label + '</small></td>';
-                html += '<td style="padding: 8px;"><input type="text" id="cfg_' + item.key + '" value="' + currentValue + '" style="width: 100%; padding: 8px; background: #0d0d1a; border: 1px solid #3d3d4d; border-radius: 4px; color: #e4e4e4;" onchange="markChanged(this)"></td>';
-                
-                if (hasSuggestion) {
-                    html += '<td style="padding: 8px;"><span style="color: #22c55e; font-weight: bold;">' + suggestion + '</span></td>';
-                    html += '<td style="padding: 8px; text-align: center;"><button class="btn btn-success" style="padding: 5px 10px; font-size: 0.75rem;" onclick="applySuggestion(\'' + item.key + '\', \'' + suggestion + '\')">Uzyj</button></td>';
-                } else if (suggestion) {
-                    html += '<td style="padding: 8px; opacity: 0.5;">' + suggestion + ' (bez zmian)</td>';
-                    html += '<td style="padding: 8px;"></td>';
-                } else {
-                    html += '<td style="padding: 8px; opacity: 0.3;">-</td>';
-                    html += '<td style="padding: 8px;"></td>';
-                }
-                
-                html += '</tr>';
+                group.keys.forEach(key => {
+                    const currentValue = currentConfig[key] || '';
+                    const defaultValue = defaultConfig[key] || '';
+                    const suggestion = suggestions[key] || '';
+                    const hasSuggestion = suggestion && suggestion !== currentValue;
+                    const isPassword = key.toLowerCase().includes('password') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('token');
+                    const inputType = isPassword ? 'password' : 'text';
+                    const isDifferentFromDefault = currentValue !== defaultValue;
+                    
+                    html += '<tr style="border-bottom: 1px solid #2d2d3d;">';
+                    html += '<td style="padding: 8px;"><code style="background: #0d0d1a; padding: 2px 6px; border-radius: 3px;">' + escapeHtml(key) + '</code></td>';
+                    html += '<td style="padding: 8px;"><input type="' + inputType + '" id="cfg_' + escapeHtml(key) + '" value="' + escapeHtml(currentValue) + '" style="width: 100%; padding: 8px; background: #0d0d1a; border: 1px solid ' + (isDifferentFromDefault ? '#f59e0b' : '#3d3d4d') + '; border-radius: 4px; color: #e4e4e4;" onchange="markChanged(this)"></td>';
+                    
+                    // Default value column
+                    if (defaultValue) {
+                        const defaultStyle = isDifferentFromDefault ? 'color: #f59e0b; opacity: 0.8;' : 'opacity: 0.5;';
+                        html += '<td style="padding: 8px; ' + defaultStyle + '">' + (isPassword ? '••••••' : escapeHtml(defaultValue)) + '</td>';
+                    } else {
+                        html += '<td style="padding: 8px; opacity: 0.3;">-</td>';
+                    }
+                    
+                    if (hasSuggestion) {
+                        html += '<td style="padding: 8px;"><span style="color: #22c55e; font-weight: bold;">' + escapeHtml(suggestion) + '</span></td>';
+                        html += '<td style="padding: 8px; text-align: center;"><button class="btn btn-success" style="padding: 5px 10px; font-size: 0.75rem;" onclick="applySuggestion(\\'' + escapeHtml(key) + '\\', \\'' + escapeHtml(suggestion) + '\\')">Uzyj</button></td>';
+                    } else if (suggestion) {
+                        html += '<td style="padding: 8px; opacity: 0.5;">' + escapeHtml(suggestion) + ' (bez zmian)</td>';
+                        html += '<td style="padding: 8px;"></td>';
+                    } else {
+                        html += '<td style="padding: 8px; opacity: 0.3;">-</td>';
+                        html += '<td style="padding: 8px;"></td>';
+                    }
+                    
+                    html += '</tr>';
+                });
             });
+            
+            if (groups.length === 0) {
+                html = '<tr><td colspan="5" style="padding: 20px; text-align: center; opacity: 0.6;">Brak zmiennych w pliku .env</td></tr>';
+            }
             
             document.getElementById('configTableBody').innerHTML = html;
         }
@@ -631,11 +893,11 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         
         function applyAllSuggestions() {
             let applied = 0;
-            configKeys.forEach(item => {
-                const suggestion = suggestions[item.key];
-                const currentValue = currentConfig[item.key] || '';
+            Object.keys(suggestions).forEach(key => {
+                const suggestion = suggestions[key];
+                const currentValue = currentConfig[key] || '';
                 if (suggestion && suggestion !== currentValue) {
-                    applySuggestion(item.key, suggestion);
+                    applySuggestion(key, suggestion);
                     applied++;
                 }
             });
@@ -643,16 +905,19 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
         
         function saveFromForm() {
-            // Build new config from form
+            // Build new config from form - iterate all keys from currentConfig
             let content = document.getElementById('envEditor').value;
+            const keys = currentConfig._keyOrder || Object.keys(currentConfig).filter(k => k !== '_keyOrder');
             
-            configKeys.forEach(item => {
-                const input = document.getElementById('cfg_' + item.key);
+            keys.forEach(key => {
+                const input = document.getElementById('cfg_' + key);
                 if (input) {
                     const newValue = input.value;
-                    const regex = new RegExp('^' + item.key + '=.*$', 'm');
+                    // Escape special regex characters in key
+                    const escapedKey = key.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+                    const regex = new RegExp('^' + escapedKey + '=.*$', 'm');
                     if (content.match(regex)) {
-                        content = content.replace(regex, item.key + '=' + newValue);
+                        content = content.replace(regex, key + '=' + newValue);
                     }
                 }
             });
@@ -694,6 +959,10 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         console.log('[webenv] Initializing...');
         buildConfigTable();
         loadDevices();
+        const tokenInput = document.getElementById('adminToken');
+        if (tokenInput) tokenInput.value = getAdminToken();
+        refreshMakePanel();
+        setInterval(refreshMakePanel, 3000);
     </script>
 </body>
 </html>
@@ -708,6 +977,16 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
+
+    def is_admin_authorized(self, token=''):
+        client_ip = self.client_address[0]
+        header_token = self.headers.get('X-Admin-Token', '')
+        provided = token or header_token
+
+        if ADMIN_TOKEN:
+            return provided == ADMIN_TOKEN
+
+        return client_ip in ('127.0.0.1', '::1')
     
     def send_html(self, html):
         self.send_response(200)
@@ -725,7 +1004,12 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
             return f'# Error reading file: {e}'
     
     def do_GET(self):
-        if self.path == '/':
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
+        token = query.get('token', [''])[0]
+
+        if path == '/':
             env_content = self.read_file(ENV_FILE)
             example_content = self.read_file(ENV_EXAMPLE)
             
@@ -739,12 +1023,12 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
                 '{{env_path}}', ENV_FILE
             )
             self.send_html(html)
-        
-        elif self.path == '/load':
+
+        elif path == '/load':
             content = self.read_file(ENV_FILE)
             self.send_json({'success': True, 'content': content})
-        
-        elif self.path == '/devices':
+
+        elif path == '/devices':
             # Load discovered devices from JSON
             devices_file = os.path.join(PROJECT_DIR, 'logs', 'discovered_devices.json')
             try:
@@ -755,8 +1039,8 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
                 self.send_json({'success': False, 'error': 'No devices discovered yet. Run: make discover'})
             except Exception as e:
                 self.send_json({'success': False, 'error': str(e)})
-        
-        elif self.path == '/discover':
+
+        elif path == '/discover':
             # Run discovery script
             import subprocess
             try:
@@ -770,17 +1054,36 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
                 self.send_json({'success': True, 'devices': devices, 'output': result.stdout})
             except Exception as e:
                 self.send_json({'success': False, 'error': str(e)})
-        
+
+        elif path == '/admin/status':
+            if not self.is_admin_authorized(token=token):
+                self.send_json({'success': False, 'error': 'Unauthorized'}, 403)
+                return
+
+            with MAKE_STATE_LOCK:
+                state = dict(MAKE_STATE)
+            self.send_json({'success': True, 'state': state})
+
+        elif path == '/admin/logs':
+            if not self.is_admin_authorized(token=token):
+                self.send_json({'success': False, 'error': 'Unauthorized'}, 403)
+                return
+
+            self.send_json({'success': True, 'log': _read_make_log_tail()})
+
         else:
             self.send_response(404)
             self.end_headers()
     
     def do_POST(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8')
         params = parse_qs(post_data)
-        
-        if self.path == '/save':
+
+        if path == '/save':
             try:
                 content = params.get('content', [''])[0]
                 with open(ENV_FILE, 'w', encoding='utf-8') as f:
@@ -789,8 +1092,8 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
                 print(f"[+] Saved .env file")
             except Exception as e:
                 self.send_json({'success': False, 'error': str(e)}, 500)
-        
-        elif self.path == '/reset':
+
+        elif path == '/reset':
             try:
                 content = self.read_file(ENV_EXAMPLE)
                 with open(ENV_FILE, 'w', encoding='utf-8') as f:
@@ -799,7 +1102,33 @@ class EnvEditorHandler(BaseHTTPRequestHandler):
                 print(f"[+] Reset .env to .env.example")
             except Exception as e:
                 self.send_json({'success': False, 'error': str(e)}, 500)
-        
+
+        elif path == '/admin/run':
+            token = params.get('token', [''])[0]
+            if not self.is_admin_authorized(token=token):
+                self.send_json({'success': False, 'error': 'Unauthorized'}, 403)
+                return
+
+            target = params.get('target', [''])[0]
+            if target not in ALLOWED_MAKE_TARGETS:
+                self.send_json({'success': False, 'error': 'Target not allowed'}, 400)
+                return
+            with MAKE_STATE_LOCK:
+                if MAKE_STATE['running']:
+                    self.send_json({'success': False, 'error': 'Make already running'}, 409)
+                    return
+
+                MAKE_STATE['running'] = True
+                MAKE_STATE['target'] = target
+                MAKE_STATE['exit_code'] = None
+                MAKE_STATE['started_at'] = datetime.now().isoformat(timespec='seconds')
+                MAKE_STATE['ended_at'] = None
+                MAKE_STATE['pid'] = None
+
+            thread = threading.Thread(target=_run_make_target_in_background, args=(target,), daemon=True)
+            thread.start()
+            self.send_json({'success': True, 'target': target})
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -821,7 +1150,7 @@ def main():
     print(f"  Ctrl+C aby zakonczyc")
     print("============================================================")
     
-    server = HTTPServer(('0.0.0.0', port), EnvEditorHandler)
+    server = ThreadingHTTPServer(('0.0.0.0', port), EnvEditorHandler)
     
     try:
         server.serve_forever()

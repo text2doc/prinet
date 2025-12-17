@@ -93,6 +93,10 @@ test-e2e: ## Uruchamia testy E2E wszystkich usług
 	@echo "$(BLUE)[T] Uruchamianie testów E2E...$(RESET)"
 	@./scripts/test-e2e.sh
 
+test-webenv: ## Uruchamia testy E2E dla WebEnv (.env editor GUI)
+	@echo "$(BLUE)[T] Uruchamianie testów WebEnv...$(RESET)"
+	@./scripts/test-webenv.sh
+
 test-docker: ## Testuje konfigurację Docker
 	@echo "$(BLUE)[T] Testowanie Docker...$(RESET)"
 	@echo -n "  Docker daemon: "; docker info >/dev/null 2>&1 && echo "$(GREEN)[+] OK$(RESET)" || echo "$(RED)[-] FAIL$(RESET)"
